@@ -1,47 +1,55 @@
-mod tx_filter;
+mod config;
+mod event_filters;
+mod streams;
 
-use ethers::{
-    providers::{Middleware, Provider, Ws},
-    types::Transaction,
-};
+use config::Config;
+use envconfig::Envconfig;
+
+use ethers::providers::{Provider, Ws};
+use log::info;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio_stream::StreamExt;
+use streams::{uniswap_v2_stream, Event};
 
-use tx_filter::filter_transaction;
+use tokio::sync::broadcast::{self, Sender};
+use tokio::task::JoinSet;
 
-async fn get_transactions() {
-    let ws_node_public = "wss://ethereum-rpc.publicnode.com";
-    let ws = Ws::connect(ws_node_public).await;
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+struct CustomLog {
+    address: String,
+    topics: Vec<String>,
+    data: String,
+}
 
-    if ws.is_err() {
-        println!("Error connecting to the node: {:?}", ws.err());
-        return;
-    }
+async fn event_handler(event_sender: Sender<Event>) {
+    let mut event_receiver = event_sender.subscribe();
+    let mut events: Vec<Event> = Vec::new();
 
-    let provider = Arc::new(Provider::new(ws.unwrap()));
-
-    let mut pending_txs = provider.subscribe_full_pending_txs().await.unwrap();
-    println!("Listening for pending transactions...");
-
-    let mut tx_counter: u128 = 0;
-    while let Some(tx) = pending_txs.next().await {
-        if let Some(tx) = filter_transaction(tx).await {
-            println!("To: {}, Tx: {:?}", tx.to, tx.tx);
+    loop {
+        match event_receiver.recv().await {
+            Ok(event) => events.push(event),
+            Err(_) => break,
         }
-        println!("recieved tx {}", tx_counter);
-        tx_counter += 1;
     }
 
-    //println!("Received 100 pending transactions...");
-
-    //let output_file = "pending_txs.json";
-    //let file = std::fs::File::create(output_file).unwrap();
-    //serde_json::to_writer(file, &txs).expect("Failed to write to file");
-    //println!("Saved pending transactions to {}", output_file);
+    let _ = std::fs::write("events_log.json", serde_json::to_string(&events).unwrap());
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    get_transactions().await;
+    let config = Config::init_from_env()?;
+
+    let ws = Ws::connect(config.ws_address).await?;
+    let provider: Arc<Provider<Ws>> = Arc::new(Provider::new(ws));
+    let (event_sender, _): (Sender<Event>, _) = broadcast::channel(512);
+
+    let mut set: JoinSet<()> = JoinSet::new();
+
+    set.spawn(uniswap_v2_stream(provider.clone(), event_sender.clone()));
+
+    while let Some(res) = set.join_next().await {
+        info!("{:?}", res);
+    }
+
     Ok(())
 }
