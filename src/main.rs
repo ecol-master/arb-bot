@@ -1,14 +1,13 @@
 mod config;
-mod contracts;
-mod uniswapv2;
+mod types;
+mod uniswap_v2;
 
 use crate::{
     config::Config,
-    contracts::{
+    types::{IUniswapV3Pool, IERC20},
+    uniswap_v2::{
         swapExactETHForTokensCall, swapExactTokensForTokensCall, swapTokensForExactETHCall,
-        IUniswapV3Pool, IERC20,
     },
-    uniswapv2::{UniswapV2Pair, ERC20},
 };
 
 use envconfig::Envconfig;
@@ -34,10 +33,9 @@ use std::{mem::swap, sync::Arc};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
-    let rolling_appender = rolling::daily("logs", "router_02.log");
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::INFO)
-        .with_writer(rolling_appender)
+        //.with_writer(rollig::daily("logs", "router_02.log"))
         .with_ansi(false)
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
@@ -69,16 +67,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let router02_adr = address!("0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
     let router03_adr = address!("0xE592427A0AEce92De3Edee1F18E0157C05861564");
+
     // Take the stream and print the pending transaction.
     while let Some(tx_hash) = stream.next().await {
         let tx = match provider.get_transaction_by_hash(tx_hash).await {
             Ok(Some(tx)) => tx,
             _ => continue,
         };
-
-        //if pairs.contains(&tx.to().unwrap().to_string()) {
-        //    info!("{:?}", tx.to());
-        //}
 
         let input = match tx.to() {
             Some(to) if to == router02_adr => {
@@ -87,14 +82,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             _ => continue,
         };
-
-        //let input = match hex::decode(tx.input()) {
-        //    Ok(input) => input,
-        //    Err(e) => {
-        //        info!("Deconding error: {e:?}");
-        //        continue;
-        //    }
-        //};
 
         // Decode the input using the generated `swapExactTokensForTokens` bindings.
         if let Ok(swap_data) = swapExactTokensForTokensCall::abi_decode(&input, false) {
@@ -114,8 +101,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         };
     }
-
-    //while let Some(tx) = provider.sub
 
     Ok(())
 }
