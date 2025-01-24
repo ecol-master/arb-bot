@@ -1,4 +1,4 @@
-use alloy::sol;
+use alloy::{sol, sol_types::SolCall};
 
 // Generate IERC20 contract from its abi
 sol!(
@@ -15,4 +15,36 @@ sol!(
     #[sol(rpc)]
     IUniswapV3Pool,
     "abi/IUniswapV3Pool.json"
+);
+
+sol!(
+    #[allow(missing_docs)]
+    function swapExactTokensForTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+      ) external returns (uint256[] memory amounts);
+);
+
+sol!(
+    #[allow(missing_docs)]
+    function swapExactETHForTokens(
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external payable returns (uint[] memory amounts);
+);
+
+sol!(
+    #[allow(missing_docs)]
+    function swapTokensForExactETH(
+        uint amountOut,
+        uint amountInMax,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external returns (uint[] memory amounts);
 );
