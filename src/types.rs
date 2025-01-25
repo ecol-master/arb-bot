@@ -4,6 +4,7 @@ use alloy::{sol, sol_types::SolCall};
 sol!(
     #[allow(missing_docs)]
     #[sol(rpc)]
+    #[derive(Debug)]
     IERC20,
     "abi/IERC20.json",
 );
@@ -15,4 +16,18 @@ sol!(
     #[sol(rpc)]
     IUniswapV3Pool,
     "abi/IUniswapV3Pool.json"
+);
+
+sol!(
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    IUniswapV2Pair,
+    "abi/IUniswapV2Pair.json"
+);
+
+sol!(
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    IUniswaV2Factory,
+    "abi/IUniswapV2Factory.json"
 );
