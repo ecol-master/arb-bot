@@ -1,4 +1,4 @@
-use alloy::{sol, sol_types::SolCall};
+use alloy::sol;
 
 // Generate IERC20 contract from its abi
 sol!(
@@ -16,18 +16,4 @@ sol!(
     #[sol(rpc)]
     IUniswapV3Pool,
     "abi/IUniswapV3Pool.json"
-);
-
-sol!(
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    IUniswapV2Pair,
-    "abi/IUniswapV2Pair.json"
-);
-
-sol!(
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    IUniswaV2Factory,
-    "abi/IUniswapV2Factory.json"
 );
