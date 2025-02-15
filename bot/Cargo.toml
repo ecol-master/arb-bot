@@ -1,0 +1,22 @@
+[package]
+name = "bot"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+
+[dependencies]
+envconfig.workspace = true
+tokio.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing = "0.1"
+alloy.workspace = true
+futures-util.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+hex.workspace = true
+tracing-appender.workspace = true
+anyhow.workspace = true
+enum-iterator.workspace = true

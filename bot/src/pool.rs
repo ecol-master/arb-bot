@@ -6,6 +6,7 @@ use crate::{
 use alloy::{
     primitives::{keccak256, Address},
     providers::{Provider, RootProvider},
+    transports::ipc::IpcConnect,
     pubsub::PubSubFrontend,
     rpc::{
         client::RpcClient,
