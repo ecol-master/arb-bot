@@ -6,6 +6,8 @@ license = "GPL-3.0"
 rust-version = "1.84"
 
 [workspace]
+resolver = "2"
+
 members = ["bot", "strategies"]
 
 [workspace.dependencies]
@@ -17,6 +19,7 @@ alloy = { version = "0.9.2", features = [
     "full",
     "provider-anvil-api",
     "rpc-client-ipc",
+    "node-bindings",
 ] }
 futures-util = "0.3"
 serde_json = "1.0.137"
@@ -27,5 +30,5 @@ anyhow = "1.0.95"
 enum-iterator = "2.1.0"
 
 # local deps
-bot = { path = "bot" }
-strategies = { path = "strategies" }
+bot = { path = "bot", default-features = false }
+strategies = { path = "strategies", default-features = false }

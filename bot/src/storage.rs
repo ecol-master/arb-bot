@@ -7,7 +7,7 @@ use alloy::{
 use anyhow::anyhow;
 use enum_iterator::Sequence;
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{hash_map::Entry, BTreeSet, HashMap},
     hash::Hash,
     sync::{Arc, RwLock},
 };
@@ -23,26 +23,77 @@ pub struct Storage {
 }
 
 impl Storage {
-    pub async fn new(pairs: &Vec<PairV2Instance>) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new() -> Self {
+        let storage = Self {
+            reserves: Arc::new(RwLock::new(HashMap::new())),
+        };
+        /*
         let mut reserves: HashMap<Address, HashMap<Address, Uint<112, 2>>> = HashMap::new();
 
         for pair in pairs {
             let token0_adr = pair.token0().call().await?._0;
             let token1_adr = pair.token1().call().await?._0;
+            let pair_reserves = pair.getReserves().call().await?;
             reserves
                 .entry(token0_adr.clone())
                 .or_insert(HashMap::new())
-                .insert(token1_adr.clone(), Uint::from(0));
+                .insert(token1_adr.clone(), pair_reserves.reserve0);
 
             reserves
                 .entry(token1_adr)
                 .or_insert(HashMap::new())
-                .insert(token0_adr.clone(), Uint::from(0));
+                .insert(token0_adr.clone(), pair_reserves.reserve1);
         }
 
         Ok(Self {
             reserves: Arc::new(RwLock::new(reserves)),
         })
+        */
+        storage
+    }
+
+    pub async fn add_pair(
+        &self,
+        token0: &Address,
+        token1: &Address,
+        reserve0: Uint<112, 2>,
+        reserve1: Uint<112, 2>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        /*
+        self.reserves
+            .entry(*token0)
+            .or_insert(HashMap::new())
+            .insert(token1_adr.clone(), pair_reserves.reserve0);
+
+        reserves
+            .entry(token1_adr)
+            .or_insert(HashMap::new())
+            .insert(token0_adr.clone(), pair_reserves.reserve1);
+        */
+        // add for reserve of token0 in pair with token1
+        match self.reserves.write().unwrap().entry(*token0) {
+            Entry::Vacant(mut entry) => {
+                let mut new_map = HashMap::new();
+                new_map.insert(*token1, reserve0);
+                entry.insert(new_map);
+            }
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().insert(*token1, reserve0);
+            }
+        };
+
+        // add for reserve of token1 in pair with token0
+        match self.reserves.write().unwrap().entry(*token1) {
+            Entry::Vacant(mut entry) => {
+                let mut new_map = HashMap::new();
+                new_map.insert(*token0, reserve1);
+                entry.insert(new_map);
+            }
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().insert(*token0, reserve1);
+            }
+        };
+        Ok(())
     }
 
     pub async fn update_reserves(

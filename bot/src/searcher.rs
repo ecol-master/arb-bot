@@ -9,61 +9,56 @@ use enum_iterator::Sequence;
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
     hash::Hash,
+    ops::Add,
     sync::Arc,
 };
 use tracing::info;
 use tracing_appender::rolling::Rotation;
 
-// true -> can do erbitrage
-pub async fn floyd_warshall_search(
-    data: StorageReserves,
-) -> Result<Option<Vec<Address>>, Box<dyn std::error::Error>> {
-    info!("start floyd warshall");
+pub async fn triangular_swap(
+    reserves: StorageReserves,
+) -> Result<Vec<(Address, Address, Address)>, Box<dyn std::error::Error>> {
+    info!("start triangular swap find");
+    let mut paths = Vec::new();
 
-    Ok(None)
-}
-
-pub async fn dfs_search(
-    data: StorageReserves,
-) -> Result<Option<Vec<Address>>, Box<dyn std::error::Error>> {
-    info!("start dfs search");
-
-    let tokens_max = data.len();
-
-    // let start_token = address!("0xdAC17F958D2ee523a2206206994597C13D831ec7");
-
-    let amount_in: Uint<112, 2> = Uint::from(100_000_000);
-
-    for start_token in data.keys() {
-        let mut current_path: Vec<Address> = vec![start_token.clone()];
-        for sub_token in data.get(start_token).unwrap().keys() {
-            let (reserve0, reserve1) = get_reserves(&data, start_token, sub_token);
-            if dfs(
-                &mut current_path,
-                start_token,
-                sub_token,
-                calc_out(reserve0, reserve1, amount_in),
-            ) {
-                return Ok(Some(current_path));
+    for token_0 in reserves.keys() {
+        let pair_variants = reserves.get(token_0).unwrap();
+        for token_1 in pair_variants.keys() {
+            for token_2 in reserves.get(token_1).unwrap().keys() {
+                if pair_variants.contains_key(token_2) {
+                    let is_loop =
+                        check_tokens_for_triangular_swap(&reserves, token_0, token_1, token_2);
+                    if is_loop {
+                        paths.push((*token_0, *token_1, *token_2));
+                        info!("");
+                    }
+                }
             }
         }
     }
-
-    return Ok(None);
+    Ok(paths)
 }
 
-// returns if cycle found
-// cycle stores in current_path
-fn dfs(
-    current_path: &mut Vec<Address>,
-    start_token: &Address,
-    current_token: &Address,
-    current_token_amount: Uint<112, 2>,
+fn check_tokens_for_triangular_swap(
+    reserves: &StorageReserves,
+    token0: &Address,
+    token1: &Address,
+    token2: &Address,
 ) -> bool {
-    todo!()
+    let (reserve_0, reserve_1) = get_reserves(reserves, token0, token1);
+    let p_ij = calc_token0_price_log(reserve_0, reserve_1);
+
+    let (reserve_1, reserve_2) = get_reserves(reserves, token1, token2);
+    let p_jk = calc_token0_price_log(reserve_1, reserve_2);
+
+    let (reserve_2, reserve_0) = get_reserves(reserves, token2, token0);
+    let p_ki = calc_token0_price_log(reserve_2, reserve_0);
+    //info!("p_ij = {p_ij:?}, p_jk = {p_jk:?}, p_ki = {p_ki:?}");
+
+    p_ij + p_jk + p_ki > 0
 }
 
-fn get_reserves(
+pub fn get_reserves(
     data: &StorageReserves,
     token0: &Address,
     token1: &Address,
@@ -74,15 +69,30 @@ fn get_reserves(
     (*reserve0, *reserve1)
 }
 
-fn calc_out(
-    reserve0: Uint<112, 2>,
-    reserve1: Uint<112, 2>,
-    amount_in: Uint<112, 2>,
-) -> Uint<112, 2> {
-    let k = reserve0 * reserve1;
+fn calc_token0_price_log(reserve0: Uint<112, 2>, reserve1: Uint<112, 2>) -> i128 {
+    (reserve1.saturating_mul(Uint::from(997)).log2() as i128)
+        - (reserve0.saturating_mul(Uint::from(1000)).log2() as i128)
+}
 
-    let amount_in_effective = amount_in * Uint::from(997) / Uint::from(1000);
-    let new_reserve0 = reserve0 + amount_in_effective;
+pub fn calc_out(
+    reserve_x: Uint<112, 2>,
+    reserve_y: Uint<112, 2>,
+    amount_in_x: Uint<256, 4>,
+) -> Uint<256, 4> {
+    //info!("amount_in_x: {amount_in_x:?}, reserve_x: {reserve_x:?}, reserve_y: {reserve_y:?}");
+    let reserve_x: Uint<256, 4> = Uint::from(reserve_x);
+    let reserve_y: Uint<256, 4> = Uint::from(reserve_y);
+    // info!("amount_in_x: {amount_in_x:?}, reserve_x: {reserve_x:?}, reserve_y: {reserve_y:?}");
 
-    reserve1 - (k / new_reserve0)
+    let (k, is_overflow) = reserve_x.overflowing_mul(reserve_y);
+    info!("calc k = rx * ry is_overflow: {is_overflow:?}");
+
+    let (k, is_overflow) = k.overflowing_mul(Uint::from(1000));
+    info!("calc k = 1000 * k is_overflow: {is_overflow:?}");
+
+    let amount_in_effective = amount_in_x * Uint::from(997);
+    // info!("amount_in_effective: {:?}", amount_in_effective);
+    let new_reserve0 = reserve_x.saturating_mul(Uint::from(1000)) + amount_in_effective;
+
+    reserve_y - (k / new_reserve0)
 }

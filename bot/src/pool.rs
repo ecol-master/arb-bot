@@ -1,18 +1,20 @@
 use crate::{
-    searcher::{dfs_search, floyd_warshall_search},
+    searcher::{calc_out, get_reserves, triangular_swap},
     storage::Storage,
     types::{IUniswapV2Pair, IUniswapV3Pool::IUniswapV3PoolCalls},
 };
 use alloy::{
-    primitives::{keccak256, Address},
+    network::Network,
+    primitives::{keccak256, Address, Uint},
     providers::{Provider, RootProvider},
-    transports::ipc::IpcConnect,
     pubsub::PubSubFrontend,
     rpc::{
         client::RpcClient,
         types::{BlockNumberOrTag, Filter, Transaction},
     },
+    signers::k256::sha2::digest::block_buffer::EagerBuffer,
     sol_types::SolEvent,
+    transports::http::{Client, Http},
 };
 use futures_util::{stream, FutureExt, StreamExt};
 use std::sync::Arc;
@@ -43,22 +45,37 @@ use tracing::info;
     }
 */
 
-type PairType =
-    IUniswapV2Pair::IUniswapV2PairInstance<PubSubFrontend, Arc<RootProvider<PubSubFrontend>>>;
+pub struct SubcribePoolContext {
+    pub pair_adr: Address,
+    pub storage: Arc<Storage>,
+    pub provider: Arc<RootProvider<PubSubFrontend>>,
+    pub anvil_provider: Arc<RootProvider<Http<Client>>>,
+}
 
-pub async fn subscribe_pool(
-    pair: PairType,
-    storage: Arc<Storage>,
-    provider: Arc<RootProvider<PubSubFrontend>>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let pair_adr = pair.address();
+//type PairType =IUniswapV2Pair::IUniswapV2PairInstance<PubSubFrontend, Arc<RootProvider<PubSubFrontend>>>;
+
+pub async fn subscribe_pool(ctx: SubcribePoolContext) -> Result<(), Box<dyn std::error::Error>> {
+    let SubcribePoolContext {
+        pair_adr,
+        storage,
+        provider,
+        anvil_provider,
+    } = ctx;
+
+    let pair = IUniswapV2Pair::new(pair_adr, provider.clone());
+
     let token0 = pair.token0().call().await?._0;
     let token1 = pair.token1().call().await?._0;
+    let reserves = pair.getReserves().call().await?;
+
+    storage
+        .add_pair(&token0, &token1, reserves.reserve0, reserves.reserve1)
+        .await?;
 
     info!("Start listening: {pair_adr:?}");
 
     let filter = Filter::new()
-        .address(*pair_adr)
+        .address(pair_adr)
         .event_signature(IUniswapV2Pair::Swap::SIGNATURE_HASH)
         .from_block(BlockNumberOrTag::Latest);
 
@@ -81,11 +98,26 @@ pub async fn subscribe_pool(
             .update_reserves(token0.clone(), token1.clone(), reserves)
             .await?;
 
-        let data = storage.get_reserves();
-        match dfs_search(data).await? {
-            Some(path) => info!("Path found: {:?}", path),
-            _ => info!("Path not found"),
-        };
+        let reserves = storage.get_reserves();
+        for path in triangular_swap(reserves.clone()).await? {
+            info!("Path found: {:?}", path);
+
+            let start_amount: Uint<256, 4> = Uint::from(100_000);
+
+            let (reserve0, reserve1) = get_reserves(&reserves, &path.0, &path.1);
+            let out1 = calc_out(reserve0, reserve1, start_amount);
+
+            let (reserve1, reserve2) = get_reserves(&reserves, &path.1, &path.2);
+            let out2 = calc_out(reserve1, reserve2, out1);
+
+            let (reserve2, reserve0) = get_reserves(&reserves, &path.2, &path.0);
+            let out3 = calc_out(reserve2, reserve0, out2);
+            info!("Start: {start_amount:?}");
+            info!("After first swap: {out1:?}");
+            info!("After second swap: {out2:?}");
+            info!("Result out: {out3:?}");
+            info!("==============================");
+        }
     }
 
     Ok(())

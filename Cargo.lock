@@ -57,6 +57,7 @@ dependencies = [
  "alloy-eips",
  "alloy-genesis",
  "alloy-network",
+ "alloy-node-bindings",
  "alloy-provider",
  "alloy-pubsub",
  "alloy-rpc-client",
@@ -284,6 +285,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-node-bindings"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4520cd4bc5cec20c32c98e4bc38914c7fb96bf4a712105e44da186a54e65e3ba"
+dependencies = [
+ "alloy-genesis",
+ "alloy-primitives",
+ "k256",
+ "rand",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.11",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "alloy-primitives"
 version = "0.8.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -322,11 +340,14 @@ dependencies = [
  "alloy-json-rpc",
  "alloy-network",
  "alloy-network-primitives",
+ "alloy-node-bindings",
  "alloy-primitives",
  "alloy-pubsub",
  "alloy-rpc-client",
  "alloy-rpc-types-anvil",
  "alloy-rpc-types-eth",
+ "alloy-signer",
+ "alloy-signer-local",
  "alloy-transport",
  "alloy-transport-http",
  "alloy-transport-ipc",
@@ -3096,6 +3117,9 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "strategies"
 version = "1.7.1"
+dependencies = [
+ "bot",
+]
 
 [[package]]
 name = "strum"
