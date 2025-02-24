@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::INFO)
-        //.with_writer(rolling::daily("logs", "router_02.log"))
+        //.with_writer(rolling::daily("logs", "processed_tx.log"))
         //.with_ansi(false)
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
@@ -49,31 +49,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await?,
     );
 
-    let anvil = Anvil::new().fork(config.rpc_url).try_spawn()?;
+    let anvil = Anvil::new()
+        .fork(config.rpc_url)
+        .arg("--no-rate-limit")
+        .try_spawn()?;
     let anvil_provider = Arc::new(ProviderBuilder::new().on_http(anvil.endpoint_url()));
-
-    let uniswap_v2_pairs = vec![
-        IUniswapV2Pair::new(
-            address!("0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc"),
-            provider.clone(),
-        ), // USDC/ETH
-        IUniswapV2Pair::new(
-            address!("0x0d4a11d5EEaaC28EC3F61d100daF4d40471f1852"),
-            provider.clone(),
-        ), // ETH/USDT
-        IUniswapV2Pair::new(
-            address!("0x811beEd0119b4AfCE20D2583EB608C6F7AF1954f"),
-            provider.clone(),
-        ), // SHIB/ETH
-        IUniswapV2Pair::new(
-            address!("0x881d5c98866a08f90A6F60E3F94f0e461093D049"),
-            provider.clone(),
-        ), // SHIB/USDC
-        IUniswapV2Pair::new(
-            address!("0x3041CbD36888bECc7bbCBc0045E3B1f144466f5f"),
-            provider.clone(),
-        ), // USDC/USDT
-    ];
 
     run_subscribers(
         Arc::new(Storage::new()),
@@ -85,12 +65,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     return Ok(());
 }
 
-const UNISWAP_V2_PAIR_ADDRESSES: [Address; 5] = [
+const UNISWAP_V2_PAIR_ADDRESSES_PREV: [Address; 5] = [
     address!("0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc"), // USDC/ETH
     address!("0x0d4a11d5EEaaC28EC3F61d100daF4d40471f1852"), // ETH/USDT
     address!("0x811beEd0119b4AfCE20D2583EB608C6F7AF1954f"), // SHIB/ETH
     address!("0x881d5c98866a08f90A6F60E3F94f0e461093D049"), // SHIB/USDC
     address!("0x3041CbD36888bECc7bbCBc0045E3B1f144466f5f"), // USDC/USDT
+];
+
+const UNISWAP_V2_PAIR_ADDRESSES: [Address; 1] = [
+    address!("0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc"), // USDC/ETH
 ];
 
 async fn run_subscribers(
