@@ -6,12 +6,7 @@ Create `.env` file with content:
 WS_ADDRESS="<Rpc Node Url>"
 ```
 
-## How to run
-```bash
-cargo run
-```
 
+# Scheme
 
-## Questions:
-- how to make a event filter for uniswap v2
- 
+![How works](./images/arb%20bot%20scheme.png)

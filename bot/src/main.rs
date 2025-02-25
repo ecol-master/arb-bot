@@ -1,4 +1,5 @@
 mod config;
+mod mempool_searchers;
 mod pool;
 mod searcher;
 mod storage;
@@ -6,12 +7,12 @@ mod types;
 
 use crate::{
     config::Config,
+    mempool_searchers::run_mempool_searches,
     pool::{subscribe_pool, SubcribePoolContext},
     storage::Storage,
-    types::IUniswapV2Pair,
+    types::{ArbBot, IUniswapV2Pair, IUniswapV2Pair::Swap},
 };
 
-use envconfig::Envconfig;
 use tokio::{fs, task::JoinHandle};
 use tracing::{info, Level};
 use tracing_appender::rolling;
@@ -20,49 +21,76 @@ use tracing_subscriber::FmtSubscriber;
 use alloy::{
     consensus::{transaction, Transaction},
     node_bindings::Anvil,
-    primitives::{address, Address, TxNumber, Uint, U256},
+    primitives::{address, Address, FixedBytes, TxNumber, Uint, U256},
     providers::{ext::AnvilApi, Provider, ProviderBuilder, RootProvider, WsConnect},
     pubsub::PubSubFrontend,
     rpc::types::anvil,
     signers::k256::elliptic_curve::weierstrass::add,
     transports::http::{Client, Http},
 };
+use crossbeam::channel::{unbounded, Sender};
+use dotenv::dotenv;
+use futures_util::StreamExt;
 use std::sync::Arc;
 use types::IUniswaV2Factory;
+
+type TxHash = FixedBytes<32>;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
+    dotenv().expect("Failed to load .env variables");
+
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::INFO)
-        //.with_writer(rolling::daily("logs", "processed_tx.log"))
-        //.with_ansi(false)
+        .with_writer(rolling::daily("logs", "processed_tx.log"))
+        .with_ansi(false)
         .finish();
+
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
-    let config = Config::init_from_env()?;
-    info!("Started listen rpc: {}", config.rpc_url);
+    let (tx_s, tx_r) = unbounded::<TxHash>();
+    let (event_s, _) = unbounded::<Swap>();
+
+    let subscriber_handle = tokio::spawn(async move {
+        if let Err(e) = run_mempool_subscriber(tx_s).await {
+            info!("Error during run_mempool_subscriber: {e:?}")
+        }
+    });
+
+    let runners_handle = tokio::spawn(async move {
+        if let Err(e) = run_mempool_searches(tx_r, event_s).await {
+            info!("Error during run_mempool_searchers: {e:?}");
+        }
+    });
+
+    subscriber_handle.await;
+    runners_handle.await;
+
+    return Ok(());
+}
+
+async fn run_mempool_subscriber(s: Sender<TxHash>) -> Result<(), Box<dyn std::error::Error>> {
+    let config = Config::new()?;
 
     let provider = Arc::new(
         ProviderBuilder::new()
-            .on_ws(WsConnect::new(config.rpc_url.clone()))
+            .on_ws(WsConnect::new(config.infura_rpc_url.clone()))
             .await?,
     );
+    //info!("Create provider");
 
-    let anvil = Anvil::new()
-        .fork(config.rpc_url)
-        .arg("--no-rate-limit")
-        .try_spawn()?;
-    let anvil_provider = Arc::new(ProviderBuilder::new().on_http(anvil.endpoint_url()));
+    let mut stream = provider
+        .subscribe_pending_transactions()
+        .await?
+        .into_stream();
 
-    run_subscribers(
-        Arc::new(Storage::new()),
-        provider.clone(),
-        anvil_provider.clone(),
-    )
-    .await?;
-
-    return Ok(());
+    info!("Start subscribing mempool on: {:?}", config.infura_rpc_url);
+    while let Some(tx_hash) = stream.next().await {
+        //info!("Send new tx_hash: {tx_hash:?}");
+        s.send(tx_hash)?;
+    }
+    Ok(())
 }
 
 const UNISWAP_V2_PAIR_ADDRESSES_PREV: [Address; 5] = [
@@ -77,6 +105,7 @@ const UNISWAP_V2_PAIR_ADDRESSES: [Address; 1] = [
     address!("0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc"), // USDC/ETH
 ];
 
+/// Run subscribers for UniswapV2Pair
 async fn run_subscribers(
     storage: Arc<Storage>,
     provider: Arc<RootProvider<PubSubFrontend>>,

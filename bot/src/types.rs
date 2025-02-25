@@ -9,14 +9,6 @@ sol!(
     "../abi/IERC20.json",
 );
 
-// V3
-sol!(
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    IUniswapV3Pool,
-    "../abi/IUniswapV3Pool.json"
-);
-
 // V2
 sol!(
     #[allow(missing_docs)]
@@ -30,6 +22,21 @@ sol!(
     #[sol(rpc)]
     IUniswaV2Factory,
     "../abi/IUniswapV2Factory.json"
+);
+
+sol! (
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    ArbBot,
+    "../contracts/out/ArbBot.sol/ArbBot.json"
+);
+
+// V3
+sol!(
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    IUniswapV3Pool,
+    "../abi/IUniswapV3Pool.json"
 );
 
 // Router02 Swap Functions

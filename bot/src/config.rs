@@ -1,7 +1,15 @@
-use envconfig::Envconfig;
+use std::env;
 
-#[derive(Envconfig)]
 pub struct Config {
-    #[envconfig(from = "RPC_URL")]
-    pub rpc_url: String,
+    pub infura_rpc_url: String,
+    pub alchemy_rpc_url: String,
+}
+
+impl Config {
+    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(Self {
+            infura_rpc_url: env::var("INFURA_RPC_URL")?,
+            alchemy_rpc_url: env::var("ALCHEMY_RPC_URL")?,
+        })
+    }
 }
