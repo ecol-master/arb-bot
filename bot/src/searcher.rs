@@ -1,19 +1,6 @@
-use crate::{storage::StorageReserves, types::IUniswapV2Pair::IUniswapV2PairInstance};
-use alloy::{
-    primitives::{address, Address, Uint, U256},
-    providers::{Provider, RootProvider},
-    pubsub::PubSubFrontend,
-};
-use anyhow::anyhow;
-use enum_iterator::Sequence;
-use std::{
-    collections::{BTreeSet, HashMap, HashSet},
-    hash::Hash,
-    ops::Add,
-    sync::Arc,
-};
+use crate::storage::StorageReserves;
+use alloy::primitives::{Address, Uint};
 use tracing::info;
-use tracing_appender::rolling::Rotation;
 
 pub async fn triangular_swap(
     reserves: StorageReserves,

@@ -1,23 +1,15 @@
 use crate::{
-    searcher::{calc_out, get_reserves, triangular_swap},
     storage::Storage,
-    types::{IUniswapV2Pair, IUniswapV3Pool::IUniswapV3PoolCalls},
+    types::IUniswapV2Pair,
 };
 use alloy::{
-    network::TransactionBuilder,
-    primitives::{keccak256, Address, Uint, U256},
+    primitives::Address,
     providers::{Provider, RootProvider},
     pubsub::PubSubFrontend,
-    rpc::{
-        client::RpcClient,
-        types::{BlockNumberOrTag, Filter, Transaction, TransactionRequest},
-    },
-    signers::k256::sha2::digest::block_buffer::EagerBuffer,
     sol_types::SolEvent,
     transports::http::{Client, Http},
 };
-use futures_util::{stream, FutureExt, StreamExt};
-use std::{io::Read, sync::Arc};
+use std::sync::Arc;
 use tracing::info;
 
 pub struct SubcribePoolContext {

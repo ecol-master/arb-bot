@@ -1,18 +1,15 @@
 use crate::types::IUniswapV2Pair;
 use alloy::{
-    primitives::{Address, Uint, U256},
-    providers::{Provider, RootProvider},
+    primitives::{Address, Uint},
+    providers::RootProvider,
     pubsub::PubSubFrontend,
 };
 use anyhow::anyhow;
-use enum_iterator::Sequence;
 use std::{
-    collections::{hash_map::Entry, BTreeSet, HashMap},
-    hash::Hash,
+    collections::{hash_map::Entry, HashMap},
     sync::{Arc, RwLock},
 };
 use tracing::info;
-use tracing_appender::rolling::Rotation;
 
 type PairV2Instance =
     IUniswapV2Pair::IUniswapV2PairInstance<PubSubFrontend, Arc<RootProvider<PubSubFrontend>>>;
@@ -72,7 +69,7 @@ impl Storage {
         */
         // add for reserve of token0 in pair with token1
         match self.reserves.write().unwrap().entry(*token0) {
-            Entry::Vacant(mut entry) => {
+            Entry::Vacant(entry) => {
                 let mut new_map = HashMap::new();
                 new_map.insert(*token1, reserve0);
                 entry.insert(new_map);
@@ -84,7 +81,7 @@ impl Storage {
 
         // add for reserve of token1 in pair with token0
         match self.reserves.write().unwrap().entry(*token1) {
-            Entry::Vacant(mut entry) => {
+            Entry::Vacant(entry) => {
                 let mut new_map = HashMap::new();
                 new_map.insert(*token0, reserve1);
                 entry.insert(new_map);

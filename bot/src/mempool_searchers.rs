@@ -1,46 +1,39 @@
-use crate::{config, config::Config, types::IUniswapV2Pair::Swap};
+use crate::{config::Config, types::IUniswapV2Pair::Swap};
 use alloy::{
     consensus::Transaction,
     network::TransactionBuilder,
     node_bindings::Anvil,
     primitives::FixedBytes,
-    providers::{Provider, ProviderBuilder, RootProvider, WsConnect},
+    providers::{Provider, ProviderBuilder, RootProvider},
     pubsub::PubSubFrontend,
     rpc::types::TransactionRequest,
 };
-use crossbeam::channel::{Receiver, Sender, TryRecvError};
+use crossbeam::channel::{Receiver, Sender};
 use std::ops::Range;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
-use tracing::info;
 
 type R = Receiver<FixedBytes<32>>;
 type S = Sender<Swap>;
 type P = Arc<RootProvider<PubSubFrontend>>;
 
-const PORTS: Range<u16> = 8000..8006;
-pub async fn run_mempool_searches(r: R, s: S) -> Result<(), Box<dyn std::error::Error>> {
-    info!("Start running mempool runners");
-    let config = Config::new()?;
-    let provider = Arc::new(
-        ProviderBuilder::new()
-            .on_ws(WsConnect::new(config.alchemy_rpc_url.clone()))
-            .await?,
-    );
+const PORTS: Range<u16> = 8000..8002;
+pub async fn run_mempool_searches(r: R, s: S, p: P) -> Result<(), Box<dyn std::error::Error>> {
+    tracing::info!("Start running mempool runners");
 
     let mut handles: Vec<JoinHandle<()>> = Vec::new();
 
     let config = Config::new()?;
 
     for port in PORTS {
-        let provider_clone = Arc::clone(&provider);
+        let provider = p.clone();
         let r_clone = r.clone();
         let s_clone = s.clone();
         let rpc_url = config.alchemy_rpc_url.clone();
 
         let handle = tokio::spawn(async move {
-            if let Err(e) = run_anvil(port, rpc_url, provider_clone, r_clone, s_clone).await {
-                info!("Failed to run_anvil: {e:?}")
+            if let Err(e) = run_anvil(port, rpc_url, provider, r_clone, s_clone).await {
+                tracing::info!("Failed to run_anvil: {e:?}")
             }
         });
         handles.push(handle);
@@ -61,15 +54,19 @@ async fn run_anvil(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let anvil = Anvil::new().fork(rpc_url).port(port).try_spawn()?;
     let anvil_provider = ProviderBuilder::new().on_http(anvil.endpoint_url());
-    info!("Run anvil runner on {port:?}");
+    tracing::info!("Run anvil runner on {port:?}");
 
+    let processed_tx = 0u64;
     loop {
         match r.recv() {
             Ok(tx_hash) => {
-                //info!("received {tx_hash:?}");
+                tracing::info!("received {tx_hash:?}");
                 let tx = match provider.get_transaction_by_hash(tx_hash).await {
                     Ok(Some(tx)) => tx,
-                    _ => continue,
+                    _ => {
+                        tracing::info!("TX not found in mempool: {tx_hash:?}");
+                        continue;
+                    }
                 };
 
                 let input = tx.inner.input().clone();
@@ -79,11 +76,13 @@ async fn run_anvil(
                 let receipt = pending_tx.get_receipt().await?;
 
                 let logs = receipt.inner.logs();
-                if logs.is_empty() {
-                    info!("NO LOGS")
+                if !logs.is_empty() {
+                    tracing::info!("FOUND LOGS: {logs:?}")
                 } else {
-                    info!("FOUND LOGS: {logs:?}")
+                    tracing::info!("NO LOGS");
                 }
+                //if processed_tx % 20 == 0 {
+                //}
             }
             //Err(TryRecvError::Empty) => info!("no messages, i am still waiting"),
             Err(_) => break,
