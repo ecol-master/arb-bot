@@ -8,7 +8,7 @@ rust-version = "1.84"
 [workspace]
 resolver = "2"
 
-members = ["bot", "strategies"]
+members = ["bot", "contracts/rust/ethereum-abi", "strategies", "uniswap-stats"]
 
 [workspace.dependencies]
 tokio = { version = "1.43.0", features = ["full"] }
@@ -27,9 +27,10 @@ hex = "0.4.3"
 tracing-appender = "0.2.3"
 anyhow = "1.0.95"
 enum-iterator = "2.1.0"
-crossbeam = {version = "0.8.4", features = ["crossbeam-channel"]}
-dotenv = {version = "0.15.0"}
+crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
+dotenv = { version = "0.15.0" }
 
 # local deps
 bot = { path = "bot", default-features = false }
 strategies = { path = "strategies", default-features = false }
+ethereum-abi = { path = "contracts/rust/ethereum-abi" }

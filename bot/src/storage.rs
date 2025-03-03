@@ -1,10 +1,10 @@
-use crate::types::IUniswapV2Pair;
 use alloy::{
     primitives::{Address, Uint},
     providers::RootProvider,
     pubsub::PubSubFrontend,
 };
 use anyhow::anyhow;
+use ethereum_abi::IUniswapV2Pair;
 use std::{
     collections::{hash_map::Entry, HashMap},
     sync::{Arc, RwLock},

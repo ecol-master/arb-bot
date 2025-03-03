@@ -1016,6 +1016,7 @@ dependencies = [
  "crossbeam",
  "dotenv",
  "enum-iterator",
+ "ethereum-abi",
  "futures-util",
  "hex",
  "serde",
@@ -1425,6 +1426,13 @@ checksum = "33d852cb9b869c2a9b3df2f71a3074817f01e1844f839a144f5fcef059a4eb5d"
 dependencies = [
  "libc",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "ethereum-abi"
+version = "1.7.1"
+dependencies = [
+ "alloy",
 ]
 
 [[package]]
@@ -3634,6 +3642,17 @@ name = "unicode-xid"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
+
+[[package]]
+name = "uniswap-stats"
+version = "1.7.1"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "untrusted"

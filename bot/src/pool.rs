@@ -1,7 +1,4 @@
-use crate::{
-    storage::Storage,
-    types::IUniswapV2Pair,
-};
+use crate::storage::Storage;
 use alloy::{
     primitives::Address,
     providers::{Provider, RootProvider},
@@ -9,6 +6,7 @@ use alloy::{
     sol_types::SolEvent,
     transports::http::{Client, Http},
 };
+use ethereum_abi::IUniswapV2Pair;
 use std::sync::Arc;
 use tracing::info;
 
@@ -18,8 +16,6 @@ pub struct SubcribePoolContext {
     pub provider: Arc<RootProvider<PubSubFrontend>>,
     pub anvil_provider: Arc<RootProvider<Http<Client>>>,
 }
-
-//type PairType =IUniswapV2Pair::IUniswapV2PairInstance<PubSubFrontend, Arc<RootProvider<PubSubFrontend>>>;
 
 pub async fn subscribe_pool(ctx: SubcribePoolContext) -> Result<(), Box<dyn std::error::Error>> {
     let SubcribePoolContext {

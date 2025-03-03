@@ -1,4 +1,4 @@
-use crate::{config::Config, types::IUniswapV2Pair::Swap};
+use crate::config::Config;
 use alloy::{
     consensus::Transaction,
     network::TransactionBuilder,
@@ -9,6 +9,7 @@ use alloy::{
     rpc::types::TransactionRequest,
 };
 use crossbeam::channel::{Receiver, Sender};
+use ethereum_abi::IUniswapV2Pair::Swap;
 use std::ops::Range;
 use std::sync::Arc;
 use tokio::task::JoinHandle;

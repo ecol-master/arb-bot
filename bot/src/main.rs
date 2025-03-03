@@ -4,7 +4,6 @@ mod mempool_subscribers;
 mod pool;
 mod searcher;
 mod storage;
-mod types;
 
 use crate::{
     config::Config,
@@ -12,9 +11,8 @@ use crate::{
     mempool_subscribers::run_mempool_subscribers,
     pool::{subscribe_pool, SubcribePoolContext},
     storage::Storage,
-    types::IUniswapV2Pair::Swap,
 };
-
+use ethereum_abi::IUniswapV2Pair::Swap;
 use tokio::task::JoinHandle;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
