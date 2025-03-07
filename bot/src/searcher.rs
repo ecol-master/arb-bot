@@ -1,6 +1,34 @@
-use crate::storage::StorageReserves;
-use alloy::primitives::{Address, Uint};
+use alloy::{
+    primitives::{Address, Log, Uint},
+    providers::RootProvider,
+    pubsub::PubSubFrontend,
+    sol_types::SolEvent,
+};
+use anyhow::Result;
+use crossbeam::channel::Receiver;
+use ethereum_abi::IUniswapV2Pair;
+use hashbrown::HashMap;
+use std::sync::Arc;
+use storage::Storage;
 use tracing::info;
+
+type R = Receiver<Log>;
+type P = Arc<RootProvider<PubSubFrontend>>;
+
+pub async fn listen_swaps(r: R, storage: Storage) -> Result<()> {
+    while let Ok(log) = r.recv() {
+        let sync = IUniswapV2Pair::Sync::decode_log(&log, false)?;
+        tracing::info!(
+            "sync {{ adr: {:?}, reserve_0: {}, reserve_1: {} }}",
+            sync.address,
+            sync.reserve0,
+            sync.reserve1
+        );
+    }
+    Ok(())
+}
+
+type StorageReserves = HashMap<Address, HashMap<Address, Uint<112, 2>>>;
 
 pub async fn triangular_swap(
     reserves: StorageReserves,
@@ -25,6 +53,9 @@ pub async fn triangular_swap(
     }
     Ok(paths)
 }
+
+// token0, token1, token2
+// (reserve0, reserver1), ()
 
 fn check_tokens_for_triangular_swap(
     reserves: &StorageReserves,

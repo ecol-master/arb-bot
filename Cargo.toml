@@ -8,10 +8,17 @@ rust-version = "1.84"
 [workspace]
 resolver = "2"
 
-members = ["bot", "contracts/rust/ethereum-abi", "strategies", "uniswap-stats"]
+members = [
+    "bot",
+    "contracts/rust/ethereum-abi",
+    "storage",
+    "strategies",
+    "uniswap-stats",
+]
 
 [workspace.dependencies]
 tokio = { version = "1.43.0", features = ["full"] }
+tokio-postgres = "0.7"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing = "0.1"
 alloy = { version = "0.9.2", features = [
@@ -29,8 +36,10 @@ anyhow = "1.0.95"
 enum-iterator = "2.1.0"
 crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
 dotenv = { version = "0.15.0" }
+hashbrown = { version = "0.15.2" }
 
 # local deps
 bot = { path = "bot", default-features = false }
 strategies = { path = "strategies", default-features = false }
 ethereum-abi = { path = "contracts/rust/ethereum-abi" }
+storage = { path = "storage" }

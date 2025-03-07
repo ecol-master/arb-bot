@@ -21,6 +21,8 @@ anyhow.workspace = true
 enum-iterator.workspace = true
 crossbeam.workspace = true
 dotenv.workspace = true
+hashbrown.workspace = true
 
 #
 ethereum-abi.workspace = true
+storage.workspace = true

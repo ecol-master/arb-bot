@@ -1,24 +1,15 @@
 mod config;
 mod mempool_searchers;
 mod mempool_subscribers;
-mod pool;
 mod searcher;
-mod storage;
 
-use crate::{
-    config::Config,
-    mempool_searchers::run_mempool_searches,
-    mempool_subscribers::run_mempool_subscribers,
-    pool::{subscribe_pool, SubcribePoolContext},
-    storage::Storage,
-};
-use ethereum_abi::IUniswapV2Pair::Swap;
+use crate::{config::Config, mempool_subscribers::subscribe_sync_in_block, searcher::listen_swaps};
 use tokio::task::JoinHandle;
-use tracing::{info, Level};
+use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
 use alloy::{
-    primitives::{address, Address, FixedBytes},
+    primitives::{address, Address, FixedBytes, Log},
     providers::{Provider, ProviderBuilder, RootProvider, WsConnect},
     pubsub::PubSubFrontend,
     transports::http::{Client, Http},
@@ -26,6 +17,7 @@ use alloy::{
 use crossbeam::channel::unbounded;
 use dotenv::dotenv;
 use std::sync::Arc;
+use storage::Storage;
 
 type TxHash = FixedBytes<32>;
 
@@ -42,27 +34,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
-    let (tx_s, tx_r) = unbounded::<TxHash>();
-    let (event_s, _) = unbounded::<Swap>();
+    let (log_s, log_r) = unbounded::<Log>();
 
-    let rpc = Config::new()?.alchemy_rpc_url;
+    let rpc = Config::new()?.infura_rpc_url;
     let provider = Arc::new(ProviderBuilder::new().on_ws(WsConnect::new(rpc)).await?);
+    let storage = Storage::new(provider.clone()).await?;
 
-    let p = provider.clone();
+    let listener_handle = tokio::spawn(async move {
+        if let Err(e) = listen_swaps(log_r, storage).await {
+            tracing::error!("Error during listen_swaps: {e:?}");
+        }
+    });
+
     let subscriber_handle = tokio::spawn(async move {
-        if let Err(e) = run_mempool_subscribers(tx_s, p).await {
-            info!("Error during run_mempool_subscriber: {e:?}")
+        if let Err(e) = subscribe_sync_in_block(log_s, provider).await {
+            tracing::error!("Error during subscribe_swaps_in_block: {e:?}");
         }
     });
 
-    let runners_handle = tokio::spawn(async move {
-        if let Err(e) = run_mempool_searches(tx_r, event_s, provider).await {
-            info!("Error during run_mempool_searchers: {e:?}");
-        }
-    });
-
-    subscriber_handle.await;
-    runners_handle.await;
+    listener_handle.await?;
+    subscriber_handle.await?;
 
     return Ok(());
 }
@@ -78,33 +69,3 @@ const UNISWAP_V2_PAIR_ADDRESSES_PREV: [Address; 5] = [
 const UNISWAP_V2_PAIR_ADDRESSES: [Address; 1] = [
     address!("0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc"), // USDC/ETH
 ];
-
-/// Run subscribers for UniswapV2Pair
-async fn run_subscribers(
-    storage: Arc<Storage>,
-    provider: Arc<RootProvider<PubSubFrontend>>,
-    anvil_provider: Arc<RootProvider<Http<Client>>>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut handles: Vec<JoinHandle<()>> = Vec::new();
-
-    for pair_adr in UNISWAP_V2_PAIR_ADDRESSES {
-        let ctx = SubcribePoolContext {
-            pair_adr,
-            storage: storage.clone(),
-            provider: provider.clone(),
-            anvil_provider: anvil_provider.clone(),
-        };
-
-        let handle = tokio::spawn(async move {
-            if let Err(e) = subscribe_pool(ctx).await {
-                eprintln!("subscribe_pool failed for {:?}: {:?}", pair_adr, e);
-            }
-        });
-        handles.push(handle);
-    }
-
-    for handle in handles {
-        let _ = handle.await;
-    }
-    Ok(())
-}

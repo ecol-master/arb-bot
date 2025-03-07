@@ -3,6 +3,7 @@ use std::env;
 pub struct Config {
     pub infura_rpc_url: String,
     pub alchemy_rpc_url: String,
+    pub gear_rpc_url: String,
 }
 
 impl Config {
@@ -10,6 +11,7 @@ impl Config {
         Ok(Self {
             infura_rpc_url: env::var("INFURA_RPC_URL")?,
             alchemy_rpc_url: env::var("ALCHEMY_RPC_URL")?,
+            gear_rpc_url: env::var("GEAR_RPC_URL")?,
         })
     }
 }
