@@ -1,23 +1,22 @@
 use crate::{postgres::PostgresDB, tables::PairV2};
 use alloy::{
-    dyn_abi::abi::token,
-    primitives::{address, Address, Uint},
+    primitives::{Address, Uint},
     providers::RootProvider,
     pubsub::PubSubFrontend,
 };
 use anyhow::Result;
 use arbbot_config::Config;
 use ethereum_abi::IUniswapV2Pair;
-use hashbrown::{hash_map::Entry, HashMap, HashSet};
-use std::{hash::Hash, ops::Add, sync::Arc};
+use hashbrown::hash_map::{Entry, HashMap};
+use std::sync::Arc;
 
 type P = Arc<RootProvider<PubSubFrontend>>;
+pub type StorageReserves = HashMap<Address, HashMap<Address, Uint<112, 2>>>;
 
 pub struct Storage {
-    reserves: HashMap<Address, HashMap<Address, Uint<112, 2>>>,
+    reserves: StorageReserves,
     pairs_v2: HashMap<Address, (Address, Address)>,
     postgres: PostgresDB,
-
     provider: P,
 }
 

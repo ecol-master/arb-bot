@@ -1,28 +1,25 @@
+mod math;
 mod mempool_searchers;
-mod mempool_subscribers;
-mod searcher;
 
-use crate::{mempool_subscribers::subscribe_sync_in_block, searcher::listen_swaps};
-use tokio::task::JoinHandle;
+use anyhow::Result;
+use futures_util::StreamExt;
+use math::triangular_swap;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
 use alloy::{
-    primitives::{address, Address, FixedBytes, Log},
     providers::{Provider, ProviderBuilder, RootProvider, WsConnect},
     pubsub::PubSubFrontend,
-    transports::http::{Client, Http},
+    rpc::types::Filter,
+    sol_types::SolEvent,
 };
 use arbbot_config::Config;
 use arbbot_storage::Storage;
-use crossbeam::channel::unbounded;
-use dotenv::dotenv;
+use ethereum_abi::IUniswapV2Pair;
 use std::sync::Arc;
 
-type TxHash = FixedBytes<32>;
-
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     // Initialize logging
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::INFO)
@@ -34,8 +31,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Config::load("./config.json".into())?;
 
-    let (log_s, log_r) = unbounded::<Log>();
-
     let provider = Arc::new(
         ProviderBuilder::new()
             .on_ws(WsConnect::new(&config.rpc_url))
@@ -43,24 +38,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let storage = Storage::new(config, provider.clone()).await?;
 
-    let listener_handle = tokio::spawn(async move {
-        if let Err(e) = listen_swaps(log_r, storage).await {
-            tracing::error!("Error during listen_swaps: {e:?}");
-        }
-    });
-
-    let subscriber_handle = tokio::spawn(async move {
-        if let Err(e) = subscribe_sync_in_block(log_s, provider).await {
-            tracing::error!("Error during subscribe_swaps_in_block: {e:?}");
-        }
-    });
-
-    listener_handle.await?;
-    subscriber_handle.await?;
+    if let Err(e) = run(storage, provider).await {
+        tracing::error!("{e:?}");
+    }
 
     return Ok(());
 }
 
-const UNISWAP_V2_PAIR_ADDRESSES: [Address; 1] = [
-    address!("0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc"), // USDC/ETH
-];
+type P = Arc<RootProvider<PubSubFrontend>>;
+async fn run(mut storage: Storage, provider: P) -> Result<()> {
+    let filter = Filter::new().event_signature(IUniswapV2Pair::Sync::SIGNATURE_HASH);
+    let mut stream = provider.subscribe_blocks().await?.into_stream();
+
+    while let Some(header) = stream.next().await {
+        let f = filter.clone().from_block(header.number);
+        let logs = provider.get_logs(&f).await?;
+
+        for log in logs {
+            let sync = IUniswapV2Pair::Sync::decode_log(&log.inner, false)?;
+            storage
+                .update_reserves(&sync.address, sync.reserve0, sync.reserve1)
+                .await?;
+        }
+
+        let reserves = storage.reserves();
+        let paths = triangular_swap(reserves).await?;
+        tracing::info!("arbitrage paths: {:?}", paths);
+    }
+
+    Ok(())
+}

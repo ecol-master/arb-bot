@@ -1,42 +1,12 @@
-use alloy::{
-    primitives::{Address, Log, Uint},
-    providers::RootProvider,
-    pubsub::PubSubFrontend,
-    sol_types::SolEvent,
-};
+use alloy::primitives::{Address, Uint};
 use anyhow::Result;
-use crossbeam::channel::Receiver;
-use ethereum_abi::IUniswapV2Pair;
-use hashbrown::HashMap;
-use std::sync::Arc;
-use tracing::info;
-use arbbot_storage::Storage;
-
-type R = Receiver<Log>;
-type P = Arc<RootProvider<PubSubFrontend>>;
-
-pub async fn listen_swaps(r: R, mut storage: Storage) -> Result<()> {
-    while let Ok(log) = r.recv() {
-        let sync = IUniswapV2Pair::Sync::decode_log(&log, false)?;
-        //tracing::info!(
-        //"sync {{ adr: {:?}, reserve_0: {}, reserve_1: {} }}",
-        //sync.address,
-        //sync.reserve0,
-        //sync.reserve1
-        //);
-        storage
-            .update_reserves(&sync.address, sync.reserve0, sync.reserve1)
-            .await?;
-    }
-    Ok(())
-}
-
-type StorageReserves = HashMap<Address, HashMap<Address, Uint<112, 2>>>;
+use arbbot_storage::StorageReserves;
+use tracing;
 
 pub async fn triangular_swap(
     reserves: StorageReserves,
-) -> Result<Vec<(Address, Address, Address)>, Box<dyn std::error::Error>> {
-    info!("start triangular swap find");
+) -> Result<Vec<(Address, Address, Address)>> {
+    tracing::info!("start triangular swap find");
     let mut paths = Vec::new();
 
     for token_0 in reserves.keys() {
@@ -48,7 +18,7 @@ pub async fn triangular_swap(
                         check_tokens_for_triangular_swap(&reserves, token_0, token_1, token_2);
                     if is_loop {
                         paths.push((*token_0, *token_1, *token_2));
-                        info!("");
+                        tracing::info!("");
                     }
                 }
             }
@@ -106,10 +76,10 @@ pub fn calc_out(
     // info!("amount_in_x: {amount_in_x:?}, reserve_x: {reserve_x:?}, reserve_y: {reserve_y:?}");
 
     let (k, is_overflow) = reserve_x.overflowing_mul(reserve_y);
-    info!("calc k = rx * ry is_overflow: {is_overflow:?}");
+    tracing::info!("calc k = rx * ry is_overflow: {is_overflow:?}");
 
     let (k, is_overflow) = k.overflowing_mul(Uint::from(1000));
-    info!("calc k = 1000 * k is_overflow: {is_overflow:?}");
+    tracing::info!("calc k = 1000 * k is_overflow: {is_overflow:?}");
 
     let amount_in_effective = amount_in_x * Uint::from(997);
     // info!("amount_in_effective: {:?}", amount_in_effective);
