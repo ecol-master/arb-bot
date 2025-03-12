@@ -9,21 +9,24 @@ use crossbeam::channel::Receiver;
 use ethereum_abi::IUniswapV2Pair;
 use hashbrown::HashMap;
 use std::sync::Arc;
-use storage::Storage;
 use tracing::info;
+use arbbot_storage::Storage;
 
 type R = Receiver<Log>;
 type P = Arc<RootProvider<PubSubFrontend>>;
 
-pub async fn listen_swaps(r: R, storage: Storage) -> Result<()> {
+pub async fn listen_swaps(r: R, mut storage: Storage) -> Result<()> {
     while let Ok(log) = r.recv() {
         let sync = IUniswapV2Pair::Sync::decode_log(&log, false)?;
-        tracing::info!(
-            "sync {{ adr: {:?}, reserve_0: {}, reserve_1: {} }}",
-            sync.address,
-            sync.reserve0,
-            sync.reserve1
-        );
+        //tracing::info!(
+        //"sync {{ adr: {:?}, reserve_0: {}, reserve_1: {} }}",
+        //sync.address,
+        //sync.reserve0,
+        //sync.reserve1
+        //);
+        storage
+            .update_reserves(&sync.address, sync.reserve0, sync.reserve1)
+            .await?;
     }
     Ok(())
 }

@@ -1,0 +1,10 @@
+{
+  "rpc_url": "WSS_RPC",
+  "postgres": {
+    "user": "postgres",
+    "password": "postgres",
+    "db_name": "arb_bot_db",
+    "host": "127.0.0.1",
+    "port": 5432
+  }
+}

@@ -1,5 +1,5 @@
 [package]
-name = "storage"
+name = "arbbot_storage"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -16,3 +16,4 @@ hashbrown.workspace = true
 
 #
 ethereum-abi.workspace = true
+arbbot_config.workspace = true

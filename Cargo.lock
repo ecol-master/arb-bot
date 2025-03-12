@@ -721,6 +721,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34ac096ce696dc2fcabef30516bb13c0a68a11d30131d3df6f04711467681b04"
 
 [[package]]
+name = "arbbot_config"
+version = "1.7.1"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "arbbot_storage"
+version = "1.7.1"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "arbbot_config",
+ "ethereum-abi",
+ "hashbrown 0.15.2",
+ "tokio",
+ "tokio-postgres",
+ "tracing",
+]
+
+[[package]]
 name = "ark-ff"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1013,6 +1036,8 @@ version = "1.7.1"
 dependencies = [
  "alloy",
  "anyhow",
+ "arbbot_config",
+ "arbbot_storage",
  "crossbeam",
  "dotenv",
  "enum-iterator",
@@ -1022,7 +1047,6 @@ dependencies = [
  "hex",
  "serde",
  "serde_json",
- "storage",
  "tokio",
  "tracing",
  "tracing-appender",
@@ -3250,19 +3274,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "storage"
-version = "1.7.1"
-dependencies = [
- "alloy",
- "anyhow",
- "ethereum-abi",
- "hashbrown 0.15.2",
- "tokio",
- "tokio-postgres",
- "tracing",
-]
 
 [[package]]
 name = "strategies"

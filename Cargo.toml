@@ -10,6 +10,7 @@ resolver = "2"
 
 members = [
     "bot",
+    "config",
     "contracts/rust/ethereum-abi",
     "storage",
     "strategies",
@@ -42,4 +43,5 @@ hashbrown = { version = "0.15.2" }
 bot = { path = "bot", default-features = false }
 strategies = { path = "strategies", default-features = false }
 ethereum-abi = { path = "contracts/rust/ethereum-abi" }
-storage = { path = "storage" }
+arbbot_storage = { path = "storage" }
+arbbot_config = { path = "config" }

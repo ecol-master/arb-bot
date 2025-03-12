@@ -1,4 +1,3 @@
-use crate::config::Config;
 use alloy::{
     consensus::Transaction,
     network::TransactionBuilder,
@@ -24,13 +23,13 @@ pub async fn run_mempool_searches(r: R, s: S, p: P) -> Result<(), Box<dyn std::e
 
     let mut handles: Vec<JoinHandle<()>> = Vec::new();
 
-    let config = Config::new()?;
+    let alchemy_rpc_url = String::from("");
 
     for port in PORTS {
         let provider = p.clone();
         let r_clone = r.clone();
         let s_clone = s.clone();
-        let rpc_url = config.alchemy_rpc_url.clone();
+        let rpc_url = alchemy_rpc_url.clone();
 
         let handle = tokio::spawn(async move {
             if let Err(e) = run_anvil(port, rpc_url, provider, r_clone, s_clone).await {

@@ -25,4 +25,5 @@ hashbrown.workspace = true
 
 #
 ethereum-abi.workspace = true
-storage.workspace = true
+arbbot_storage.workspace = true
+arbbot_config.workspace = true

@@ -1,30 +1,19 @@
+use crate::tables::{PairV2, PAIR_V2_TABLE};
 use alloy::primitives::Address;
 use anyhow::Result;
+use arbbot_config::PostgresConfig;
 use tokio_postgres::NoTls;
-
-const PAIR_V2_TABLE: &str = "pairs_v2";
-
-#[derive(Debug, Clone)]
-pub struct PairV2 {
-    pub address: Address,
-    pub token0: Address,
-    pub token1: Address,
-}
 
 pub struct PostgresDB {
     client: tokio_postgres::Client,
 }
 
-const USER: &str = "postgres";
-const PASSWORD: &str = "postgres";
-const DB_NAME: &str = "arb_bot_db";
-const HOST: &str = "127.0.0.1";
-const PORT: u16 = 5432;
-
 impl PostgresDB {
-    pub async fn connect() -> Result<Self> {
-        let conn_data =
-            format!("host={HOST} port={PORT} user={USER} password={PASSWORD} dbname={DB_NAME} sslmode=disable");
+    pub async fn connect(cfg: &PostgresConfig) -> Result<Self> {
+        let conn_data = format!(
+            "host={} port={} user={} password={} dbname={} sslmode=disable",
+            cfg.host, cfg.port, cfg.user, cfg.password, cfg.db_name
+        );
         let (client, connection) = tokio_postgres::connect(&conn_data, NoTls).await?;
 
         tokio::spawn(async move {
@@ -58,14 +47,15 @@ impl PostgresDB {
             .execute(
                 &query,
                 &[
-                    &pair.address.to_string().as_str(),
-                    &pair.token0.to_string().as_str(),
-                    &pair.token1.to_string().as_str(),
+                    &pair.address.as_slice(),
+                    &pair.token0.as_slice(),
+                    &pair.token1.as_slice(),
                 ],
             )
             .await?;
 
         debug_assert!(rows_modified == 1, "PostgresDB don't insert PairV2");
+        tracing::info!("💵 Inserted new pair: {:?}", pair.address);
         Ok(())
     }
 }
