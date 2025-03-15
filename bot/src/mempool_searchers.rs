@@ -15,7 +15,7 @@ use tokio::task::JoinHandle;
 
 type R = Receiver<FixedBytes<32>>;
 type S = Sender<Swap>;
-type P = Arc<RootProvider<PubSubFrontend>>;
+type P = Arc<RootProvider>;
 
 const PORTS: Range<u16> = 8000..8002;
 pub async fn run_mempool_searches(r: R, s: S, p: P) -> Result<(), Box<dyn std::error::Error>> {
@@ -70,6 +70,7 @@ async fn run_anvil(
                 };
 
                 let input = tx.inner.input().clone();
+                //let input = String::from("");
                 let tx = TransactionRequest::default().with_input(input);
 
                 let pending_tx = anvil_provider.send_transaction(tx).await?;

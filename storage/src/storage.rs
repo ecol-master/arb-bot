@@ -2,7 +2,6 @@ use crate::{postgres::PostgresDB, tables::PairV2};
 use alloy::{
     primitives::{Address, Uint},
     providers::RootProvider,
-    pubsub::PubSubFrontend,
 };
 use anyhow::Result;
 use arbbot_config::Config;
@@ -10,7 +9,7 @@ use ethereum_abi::IUniswapV2Pair;
 use hashbrown::hash_map::{Entry, HashMap};
 use std::sync::Arc;
 
-type P = Arc<RootProvider<PubSubFrontend>>;
+type P = Arc<RootProvider>;
 pub type StorageReserves = HashMap<Address, HashMap<Address, Uint<112, 2>>>;
 
 pub struct Storage {
@@ -131,8 +130,6 @@ impl Storage {
                 self.add_pair_to_reserves(&token0, &token1, reserves.reserve0, reserves.reserve1);
             }
         };
-
-        tracing::info!("☑️ Reserves for pair {:?} updated!", pair_adr);
 
         Ok(())
     }

@@ -1,11 +1,6 @@
-mod math;
-mod mempool_searchers;
-
 use anyhow::Result;
 use futures_util::StreamExt;
 use math::triangular_swap;
-use tracing::Level;
-use tracing_subscriber::FmtSubscriber;
 
 use alloy::{
     providers::{Provider, ProviderBuilder, RootProvider, WsConnect},
@@ -18,24 +13,18 @@ use arbbot_storage::Storage;
 use ethereum_abi::IUniswapV2Pair;
 use std::sync::Arc;
 
+mod logger;
+mod math;
+mod mempool_searchers;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize logging
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::INFO)
-        //.with_writer(rolling::daily("logs", "processed_tx.log"))
-        //.with_ansi(false)
-        .finish();
-
-    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+    logger::init_logger(tracing::Level::INFO);
 
     let config = Config::load("./config.json".into())?;
 
-    let provider = Arc::new(
-        ProviderBuilder::new()
-            .on_ws(WsConnect::new(&config.rpc_url))
-            .await?,
-    );
+    let provider = Arc::new(ProviderBuilder::default().connect(&config.rpc_url).await?);
     let storage = Storage::new(config, provider.clone()).await?;
 
     if let Err(e) = run(storage, provider).await {
@@ -45,7 +34,7 @@ async fn main() -> Result<()> {
     return Ok(());
 }
 
-type P = Arc<RootProvider<PubSubFrontend>>;
+type P = Arc<RootProvider>;
 async fn run(mut storage: Storage, provider: P) -> Result<()> {
     let filter = Filter::new().event_signature(IUniswapV2Pair::Sync::SIGNATURE_HASH);
     let mut stream = provider.subscribe_blocks().await?.into_stream();
