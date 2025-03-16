@@ -79,61 +79,53 @@ pub fn get_reserves(
     (*reserve0, *reserve1)
 }
 
-pub fn calc_out(
+// dy = y - k / (x + 0.997 * dx)
+// dy = y - 1000* k / (1000x + 997*dx)
+pub fn calc_tokens_out(
     reserve_x: Uint<112, 2>,
     reserve_y: Uint<112, 2>,
     amount_in_x: Uint<256, 4>,
 ) -> Uint<256, 4> {
-    //info!("amount_in_x: {amount_in_x:?}, reserve_x: {reserve_x:?}, reserve_y: {reserve_y:?}");
     let reserve_x: Uint<256, 4> = Uint::from(reserve_x);
     let reserve_y: Uint<256, 4> = Uint::from(reserve_y);
-    // info!("amount_in_x: {amount_in_x:?}, reserve_x: {reserve_x:?}, reserve_y: {reserve_y:?}");
 
-    let (k, is_overflow) = reserve_x.overflowing_mul(reserve_y);
-    tracing::info!("calc k = rx * ry is_overflow: {is_overflow:?}");
+    let (k, _) = reserve_x.overflowing_mul(reserve_y);
+    let (k, _) = k.overflowing_mul(Uint::from(1000));
 
-    let (k, is_overflow) = k.overflowing_mul(Uint::from(1000));
-    tracing::info!("calc k = 1000 * k is_overflow: {is_overflow:?}");
-
-    let amount_in_effective = amount_in_x * Uint::from(997);
-    // info!("amount_in_effective: {:?}", amount_in_effective);
-    let new_reserve0 = reserve_x.saturating_mul(Uint::from(1000)) + amount_in_effective;
+    let new_reserve0 = reserve_x.saturating_mul(Uint::from(1000)) + amount_in_x * Uint::from(997);
 
     reserve_y - (k / new_reserve0)
 }
 
-fn optimal_amount_out(
-    reserves: &[(Uint<112, 2>, Uint<112, 2>)], // Резервы пар
-    fee: u128,                                 // Комиссия пула (например, 997 для 0.3%)
-) -> Option<Uint<112, 2>> {
-    let mut amount_in = Uint::<112, 2>::from(1u128);
-    let mut best_amount_out = None;
-    let mut best_profit = Uint::<112, 2>::from(0u128);
+fn optimal_amount_in_brute_force(
+    pair_reserves: &[(Uint<112, 2>, Uint<112, 2>)],
+) -> Option<Uint<256, 4>> {
+    let mut amount_in = Uint::<256, 4>::from(1);
+    let mut best_amount_in = None;
 
     for _ in 0..100 {
-        // Итерационно ищем лучший вариант
-        let mut current_amount = amount_in;
+        let start_amount_in = amount_in;
 
-        // Проходим по пулам
-        for &(reserve_in, reserve_out) in reserves.iter() {
-            let numerator = current_amount * Uint::from(fee) * reserve_out;
-            let denominator = (reserve_in * Uint::from(1000)) + (current_amount * Uint::from(fee));
-            current_amount = numerator / denominator;
+        for (reserve0, reserve1) in pair_reserves {
+            amount_in = calc_tokens_out(*reserve0, *reserve1, amount_in);
         }
 
-        // Проверяем прибыль
-
-        let profit = current_amount - amount_in;
-        tracing::info!("profit: {profit}");
-        if profit > best_profit {
-            best_profit = profit;
-            best_amount_out = Some(amount_in);
+        tracing::info!("start in: {:?}, after loop swap: {:?}", start_amount_in, amount_in);
+        if amount_in > start_amount_in {
+            let profit = amount_in - start_amount_in;
+            tracing::info!("Found profit: {profit:?}");
+            best_amount_in = Some(start_amount_in);
         }
 
-        amount_in *= Uint::<112, 2>::from(2u128); // Увеличиваем входную сумму
+        amount_in = start_amount_in * Uint::from(2);
     }
 
-    best_amount_out
+    best_amount_in
+}
+
+fn optimal_amount_in_bin_search(       pair_reserves: &[(Uint<112, 2>, Uint<112, 2>)]) -> Option<Uint<256, 4>>{
+    let mut amount_in = Uint::<256, 4>::from(1);
+    None
 }
 
 mod tests {
@@ -223,8 +215,8 @@ mod tests {
             (reserve_ki_0, reserve_ki_1),
         ];
 
-        let optimal_out = optimal_amount_out(&reserves, 997);
-        tracing::info!("optimal out: {:?}", optimal_out);
+        let best_out = optimal_amount_in_brute_force(&reserves);
+        tracing::info!("optimal out: {:?}", best_out);
 
         Ok(())
     }
