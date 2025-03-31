@@ -23,3 +23,13 @@ impl Config {
         Ok(serde_json::from_slice(&data)?)
     }
 }
+
+/// Converts config into connection string
+impl PostgresConfig {
+    pub fn into_connection(&self) -> String {
+        format!(
+            "host={} port={} user={} password={} dbname={} sslmode=disable",
+            self.host, self.port, self.user, self.password, self.db_name
+        )
+    }
+}

@@ -1,24 +1,67 @@
-use alloy::primitives::{Address, Uint};
+use crate::utils::get_pair_v2_data;
+use alloy::primitives::{address, Address, Uint};
+use alloy::providers::RootProvider;
 use anyhow::Result;
-use arbbot_storage::StorageReserves;
+use arbbot_storage::{MemDB, PairV2Data};
 use std::ops::{Div, Mul};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use tracing;
 
-pub async fn triangular_swap(
-    reserves: StorageReserves,
+type DB = Arc<RwLock<MemDB>>;
+type P = Arc<RootProvider>;
+
+const USDT: Address = address!("0xdAC17F958D2ee523a2206206994597C13D831ec7");
+
+const MAX_RESERVE_REQUEST_PER_BLOCK: usize = 100;
+
+pub async fn find_triangular_arbitrage(
+    updated_tokens: &[Address],
+    database: DB,
+    provider: P,
 ) -> Result<Vec<(Address, Address, Address)>> {
     let mut paths = Vec::new();
 
-    for token_0 in reserves.keys() {
-        let pair_variants = reserves.get(token_0).unwrap();
-        for token_1 in pair_variants.keys() {
-            for token_2 in reserves.get(token_1).unwrap().keys() {
-                if pair_variants.contains_key(token_2) {
-                    let is_loop =
-                        check_tokens_for_triangular_swap(&reserves, token_0, token_1, token_2);
+    let mut requests = 0usize;
+
+    for token0 in updated_tokens.iter() {
+        let adjacent_for_token0 = database.read().await.adjacent_for(token0)?;
+
+        for token1 in adjacent_for_token0.iter() {
+            let adjacent_for_token1 = database.read().await.adjacent_for(token1)?;
+
+            for token2 in adjacent_for_token1.iter() {
+                if adjacent_for_token0.contains(token2) && requests <= MAX_RESERVE_REQUEST_PER_BLOCK
+                {
+                    let mut reserves = Vec::<(Uint<112, 2>, Uint<112, 2>)>::new();
+
+                    for (t0, t1) in vec![(token0, token1), (token1, token2), (token2, token0)] {
+                        let r = database.read().await.reserves_for(t0, t1);
+                        match r {
+                            Some(r) => reserves.push(r),
+                            None => {
+                                let pair_adr = database.read().await.lookup_pair_adr(t0, t1)?;
+                                let data = get_pair_v2_data(&pair_adr, provider.clone()).await?;
+                                database.write().await.update_reserves(
+                                    &pair_adr,
+                                    data.reserve0,
+                                    data.reserve1,
+                                )?;
+                                requests += 1;
+
+                                reserves.push(database.read().await.reserves_for(t0, t1).unwrap());
+                            }
+                        }
+                    }
+
+                    let is_loop = check_tokens_for_arbitrage(&reserves);
 
                     if is_loop {
-                        paths.push((*token_0, *token_1, *token_2));
+                        if (*token0 == USDT || *token1 == USDT || *token2 == USDT) {
+                            tracing::info!("USES USDT token");
+                        }
+
+                        paths.push((*token0, *token1, *token2));
                     }
                 }
             }
@@ -29,54 +72,18 @@ pub async fn triangular_swap(
     Ok(paths)
 }
 
-// token0, token1, token2
-// (reserve0, reserver1), ()
-
-fn check_tokens_for_triangular_swap(
-    reserves: &StorageReserves,
-    token0: &Address,
-    token1: &Address,
-    token2: &Address,
-) -> bool {
-    let p_ij = price_log(reserves, token0, token1);
-    let p_jk = price_log(reserves, token1, token2);
-    let p_ki = price_log(reserves, token2, token0);
-
-    ///////////////
-    if p_ij + p_jk + p_ki > 0f64 {
-        tracing::info!("token0: {}, token1: {}, token2: {}", token0, token1, token2);
-        let (r0, r1) = get_reserves(reserves, token0, token1);
-        tracing::info!("token0-token1: reserve0: {}, reserve1: {}", r0, r1);
-
-        let (r0, r1) = get_reserves(reserves, token1, token2);
-        tracing::info!("token1-token2: reserve0: {}, reserve1: {}", r0, r1);
-
-        let (r0, r1) = get_reserves(reserves, token2, token0);
-        tracing::info!("token0-token2: reserve0: {}, reserve1: {}", r0, r1);
+fn check_tokens_for_arbitrage(reserves: &[(Uint<112, 2>, Uint<112, 2>)]) -> bool {
+    let mut price_log_sum = 0f64;
+    for r in reserves.iter() {
+        price_log_sum += price_approx_log(r.0, r.1);
     }
 
-    p_ij + p_jk + p_ki > 0f64
-}
-
-pub fn price_log(reserves: &StorageReserves, token0: &Address, token1: &Address) -> f64 {
-    let (reserve0, reserve1) = get_reserves(reserves, token0, token1);
-
-    price_approx_log(reserve0, reserve1)
+    price_log_sum > 0.0
 }
 
 fn price_approx_log(reserve0: Uint<112, 2>, reserve1: Uint<112, 2>) -> f64 {
     reserve0.saturating_mul(Uint::from(997)).approx_log2()
         - reserve1.saturating_mul(Uint::from(1000)).approx_log2()
-}
-
-pub fn get_reserves(
-    data: &StorageReserves,
-    token0: &Address,
-    token1: &Address,
-) -> (Uint<112, 2>, Uint<112, 2>) {
-    let reserve0 = data.get(token0).unwrap().get(token1).unwrap();
-    let reserve1 = data.get(token1).unwrap().get(token0).unwrap();
-    (*reserve0, *reserve1)
 }
 
 // dy = y - k / (x + 0.997 * dx)
@@ -110,7 +117,11 @@ fn optimal_amount_in_brute_force(
             amount_in = calc_tokens_out(*reserve0, *reserve1, amount_in);
         }
 
-        tracing::info!("start in: {:?}, after loop swap: {:?}", start_amount_in, amount_in);
+        tracing::info!(
+            "start in: {:?}, after loop swap: {:?}",
+            start_amount_in,
+            amount_in
+        );
         if amount_in > start_amount_in {
             let profit = amount_in - start_amount_in;
             tracing::info!("Found profit: {profit:?}");
@@ -123,7 +134,9 @@ fn optimal_amount_in_brute_force(
     best_amount_in
 }
 
-fn optimal_amount_in_bin_search(       pair_reserves: &[(Uint<112, 2>, Uint<112, 2>)]) -> Option<Uint<256, 4>>{
+fn optimal_amount_in_bin_search(
+    pair_reserves: &[(Uint<112, 2>, Uint<112, 2>)],
+) -> Option<Uint<256, 4>> {
     let mut amount_in = Uint::<256, 4>::from(1);
     None
 }
@@ -185,21 +198,30 @@ mod tests {
         // let token1 = address!("0x514cdb9cd8A2fb2BdCf7A3b8DDd098CaF466E548");
         // let token2 = address!("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2");
 
+        let reserve_ij_0 = Uint::<112, 2>::from(186207702687816381u128);
+        let reserve_ij_1 = Uint::<112, 2>::from(2782290017905555178812751u128);
+
+        let reserve_jk_0 = Uint::<112, 2>::from(15417613504024212838975381u128);
+        let reserve_jk_1 = Uint::<112, 2>::from(1939484985u128);
+
+        let reserve_ki_0 = Uint::<112, 2>::from(122843973192u128);
+        let reserve_ki_1 = Uint::<112, 2>::from(64043414140367650753u128);
+
         //token0-token1
-        let reserve_ij_0 = Uint::<112, 2>::from(40231970157230793u128);
-        let reserve_ij_1 = Uint::<112, 2>::from(477843027700932911383u128);
+        // let reserve_ij_0 = Uint::<112, 2>::from(40231970157230793u128);
+        // let reserve_ij_1 = Uint::<112, 2>::from(477843027700932911383u128);
         let p_ij = price_approx_log(reserve_ij_0, reserve_ij_1);
         tracing::info!("p_ij = {}", p_ij);
 
         //token1-token2
-        let reserve_jk_0 = Uint::<112, 2>::from(300142426723603695424046u128);
-        let reserve_jk_1 = Uint::<112, 2>::from(2243233282602387u128);
+        // let reserve_jk_0 = Uint::<112, 2>::from(300142426723603695424046u128);
+        // let reserve_jk_1 = Uint::<112, 2>::from(2243233282602387u128);
         let p_jk = price_approx_log(reserve_jk_0, reserve_jk_1);
         tracing::info!("p_jk = {}", p_jk);
 
         //token0-token2
-        let reserve_ki_0 = Uint::<112, 2>::from(293433654763848772092u128);
-        let reserve_ki_1 = Uint::<112, 2>::from(2907164345878467241383433u128);
+        // let reserve_ki_0 = Uint::<112, 2>::from(293433654763848772092u128);
+        // let reserve_ki_1 = Uint::<112, 2>::from(2907164345878467241383433u128);
         let p_ki = price_approx_log(reserve_ki_0, reserve_ki_1);
         tracing::info!("p_ki = {}", p_ki);
 

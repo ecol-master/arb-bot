@@ -9,11 +9,8 @@ pub struct PostgresDB {
 }
 
 impl PostgresDB {
-    pub async fn connect(cfg: &PostgresConfig) -> Result<Self> {
-        let conn_data = format!(
-            "host={} port={} user={} password={} dbname={} sslmode=disable",
-            cfg.host, cfg.port, cfg.user, cfg.password, cfg.db_name
-        );
+    pub async fn connect(config: &PostgresConfig) -> Result<Self> {
+        let conn_data = config.into_connection(); 
         let (client, connection) = tokio_postgres::connect(&conn_data, NoTls).await?;
 
         tokio::spawn(async move {
