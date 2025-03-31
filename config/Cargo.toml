@@ -1,5 +1,5 @@
 [package]
-name = "arbbot_config"
+name = "bot_config"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

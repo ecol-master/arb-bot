@@ -1,19 +1,21 @@
-use crate::utils::get_pair_v2_data;
+use crate::utils::get_reserves;
+use alloy::dyn_abi::abi::token;
 use alloy::primitives::{address, Address, Uint};
 use alloy::providers::RootProvider;
 use anyhow::Result;
-use arbbot_storage::{MemDB, PairV2Data};
+use bot_db::{tables::DEX, DB};
 use std::ops::{Div, Mul};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing;
 
-type DB = Arc<RwLock<MemDB>>;
 type P = Arc<RootProvider>;
 
 const USDT: Address = address!("0xdAC17F958D2ee523a2206206994597C13D831ec7");
 
-const MAX_RESERVE_REQUEST_PER_BLOCK: usize = 100;
+const MAX_REQUEST_PER_BLOCK: usize = 100;
+
+const DEX_ID: i32 = 1;
 
 pub async fn find_triangular_arbitrage(
     updated_tokens: &[Address],
@@ -25,38 +27,36 @@ pub async fn find_triangular_arbitrage(
     let mut requests = 0usize;
 
     for token0 in updated_tokens.iter() {
-        let adjacent_for_token0 = database.read().await.adjacent_for(token0)?;
+        let adjacent_for_token0 = database.adjacent(DEX_ID, token0).await?;
 
         for token1 in adjacent_for_token0.iter() {
-            let adjacent_for_token1 = database.read().await.adjacent_for(token1)?;
+            let adjacent_for_token1 = database.adjacent(DEX_ID, token1).await?;
 
             for token2 in adjacent_for_token1.iter() {
-                if adjacent_for_token0.contains(token2) && requests <= MAX_RESERVE_REQUEST_PER_BLOCK
-                {
+                if adjacent_for_token0.contains(token2) && requests <= MAX_REQUEST_PER_BLOCK {
+                    // TODO: choose better approach
+                    if (token0 == token1 || token0 == token2 || token1 == token2) {
+                        continue;
+                    }
                     let mut reserves = Vec::<(Uint<112, 2>, Uint<112, 2>)>::new();
 
                     for (t0, t1) in vec![(token0, token1), (token1, token2), (token2, token0)] {
-                        let r = database.read().await.reserves_for(t0, t1);
-                        match r {
-                            Some(r) => reserves.push(r),
-                            None => {
-                                let pair_adr = database.read().await.lookup_pair_adr(t0, t1)?;
-                                let data = get_pair_v2_data(&pair_adr, provider.clone()).await?;
-                                database.write().await.update_reserves(
-                                    &pair_adr,
-                                    data.reserve0,
-                                    data.reserve1,
-                                )?;
-                                requests += 1;
+                        if let Ok(r) = database.reserves(DEX_ID, t0, t1).await {
+                            reserves.push(r);
+                        } else {
+                            let pair_adr = database.pair_adr(DEX_ID, t0, t1).await?;
+                            let data = get_reserves(&pair_adr, provider.clone()).await?;
 
-                                reserves.push(database.read().await.reserves_for(t0, t1).unwrap());
-                            }
+                            let (r0, r1) = if *t0 < *t1 {
+                                (data.0, data.1)
+                            } else {
+                                (data.1, data.0)
+                            };
+                            database.update_reserves(DEX_ID, t0, t1, r0, r1).await?;
                         }
                     }
 
-                    let is_loop = check_tokens_for_arbitrage(&reserves);
-
-                    if is_loop {
+                    if arbitrage_exists(&reserves) {
                         if (*token0 == USDT || *token1 == USDT || *token2 == USDT) {
                             tracing::info!("USES USDT token");
                         }
@@ -72,7 +72,7 @@ pub async fn find_triangular_arbitrage(
     Ok(paths)
 }
 
-fn check_tokens_for_arbitrage(reserves: &[(Uint<112, 2>, Uint<112, 2>)]) -> bool {
+fn arbitrage_exists(reserves: &[(Uint<112, 2>, Uint<112, 2>)]) -> bool {
     let mut price_log_sum = 0f64;
     for r in reserves.iter() {
         price_log_sum += price_approx_log(r.0, r.1);
@@ -146,7 +146,7 @@ mod tests {
         primitives::address,
         providers::{ProviderBuilder, WsConnect},
     };
-    use arbbot_config::Config;
+    use bot_config::Config;
     use ethereum_abi::IUniswapV2Pair;
     use std::sync::Arc;
     use tracing::Level;

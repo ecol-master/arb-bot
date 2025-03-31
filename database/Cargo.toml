@@ -1,5 +1,5 @@
 [package]
-name = "arbbot_storage"
+name = "bot_db"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -13,7 +13,12 @@ tokio.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
 hashbrown.workspace = true
+sqlx.workspace = true
+serde.workspace = true
+redis.workspace = true
+bb8.workspace = true
+bb8-redis.workspace = true
 
 #
 ethereum-abi.workspace = true
-arbbot_config.workspace = true
+bot_config.workspace = true

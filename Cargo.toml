@@ -12,7 +12,7 @@ members = [
     "bot",
     "config",
     "contracts/rust/ethereum-abi",
-    "storage",
+    "database",
     "strategies",
     "uniswap-stats",
 ]
@@ -38,10 +38,14 @@ enum-iterator = "2.1.0"
 crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
 dotenv = { version = "0.15.0" }
 hashbrown = { version = "0.15.2" }
+sqlx = { version = "0.8.3", features = ["runtime-tokio", "postgres"] }
+redis = { version = "0.29.2", features = ["tokio-comp"] }
+bb8 = { version = "0.9.0" }
+bb8-redis = { version = "0.21.0" }
 
 # local deps
 bot = { path = "bot", default-features = false }
 strategies = { path = "strategies", default-features = false }
 ethereum-abi = { path = "contracts/rust/ethereum-abi" }
-arbbot_storage = { path = "storage" }
-arbbot_config = { path = "config" }
+bot_db = { path = "database" }
+bot_config = { path = "config" }

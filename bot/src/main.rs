@@ -3,13 +3,17 @@ use futures_util::StreamExt;
 use math::find_triangular_arbitrage;
 
 use alloy::{
+    dyn_abi::abi::token,
     providers::{Provider, ProviderBuilder, RootProvider, WsConnect},
     pubsub::PubSubFrontend,
     rpc::types::Filter,
     sol_types::SolEvent,
 };
-use arbbot_config::Config;
-use arbbot_storage::{tables::PairV2, MemDB, PairV2Data};
+use bot_config::Config;
+use bot_db::{
+    tables::{Pair, DEX},
+    DB,
+};
 use ethereum_abi::IUniswapV2Pair;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -27,7 +31,8 @@ async fn main() -> Result<()> {
     let config = Config::load("./config.json".into())?;
 
     let provider = Arc::new(ProviderBuilder::default().connect(&config.rpc_url).await?);
-    let database = Arc::new(RwLock::new(MemDB::new(config).await?));
+    let database = DB::new(config).await?;
+    //let database = Arc::new(RwLock::new(MemDB::new(config).await?));
 
     if let Err(e) = run(database, provider).await {
         tracing::error!("{e:?}");
@@ -36,8 +41,10 @@ async fn main() -> Result<()> {
     return Ok(());
 }
 
+const DEX_ID: i32 = 1;
+
 type P = Arc<RootProvider>;
-async fn run(mut database: Arc<RwLock<MemDB>>, provider: P) -> Result<()> {
+async fn run(database: DB, provider: P) -> Result<()> {
     let filter = Filter::new().event_signature(IUniswapV2Pair::Sync::SIGNATURE_HASH);
     let mut stream = provider.subscribe_blocks().await?.into_stream();
 
@@ -49,28 +56,30 @@ async fn run(mut database: Arc<RwLock<MemDB>>, provider: P) -> Result<()> {
 
         for log in provider.get_logs(&f).await? {
             let sync = IUniswapV2Pair::Sync::decode_log(&log.inner, false)?;
-            let pair_instance = IUniswapV2Pair::new(sync.address.clone(), provider.clone());
 
-            let k = pair_instance.kLast().call().await?._0;
-            let token0 = pair_instance.token0().call().await?._0;
-            let token1 = pair_instance.token1().call().await?._0;
+            tracing::info!("update pair: {:?}", sync.address);
+            let (token0, token1) = match database.pair_tokens(DEX_ID, &sync.address).await {
+                Ok(r) => (r.0, r.1),
+                Err(_) => {
+                    // TODO: add new pair to postgres
+                    let instance = IUniswapV2Pair::new(sync.address.clone(), provider.clone());
+                    let token0 = instance.token0().call().await?._0;
+                    let token1 = instance.token1().call().await?._0;
 
-            if !database.read().await.pair_exists(&sync.address) {
-                database
-                    .write()
-                    .await
-                    .add_pair_v2(PairV2 {
+                    let pair = Pair {
                         address: sync.address.clone(),
+                        dex_id: DEX_ID,
                         token0: token0.clone(),
                         token1: token1.clone(),
-                    })
-                    .await?;
-            }
+                    };
+                    database.add_pair(pair).await?;
+                    (token0, token1)
+                }
+            };
 
             database
-                .write()
-                .await
-                .update_reserves(&sync.address, sync.reserve0, sync.reserve1)?;
+                .update_reserves(DEX_ID, &token0, &token1, sync.reserve0, sync.reserve1)
+                .await?;
 
             updated_tokens.push(token0);
             updated_tokens.push(token1);

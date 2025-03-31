@@ -1,20 +1,17 @@
-use alloy::{primitives::Address, providers::RootProvider};
+use alloy::{
+    primitives::{Address, Uint},
+    providers::RootProvider,
+};
 use anyhow::Result;
-use arbbot_storage::PairV2Data;
 use ethereum_abi::IUniswapV2Pair;
 use std::sync::Arc;
 
-pub async fn get_pair_v2_data(
+pub async fn get_reserves(
     pair_adr: &Address,
     provider: Arc<RootProvider>,
-) -> Result<PairV2Data> {
+) -> Result<(Uint<112, 2>, Uint<112, 2>)> {
     let pair_instance = IUniswapV2Pair::new(*pair_adr, provider);
     let reserves = pair_instance.getReserves().call().await?;
-    let k = pair_instance.kLast().call().await?._0;
 
-    Ok(PairV2Data {
-        reserve0: reserves.reserve0,
-        reserve1: reserves.reserve1,
-        k,
-    })
+    Ok((reserves.reserve0, reserves.reserve1))
 }
