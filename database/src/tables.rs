@@ -21,7 +21,7 @@ pub struct PairRaw {
 }
 
 #[derive(Clone, Debug, sqlx::FromRow)]
-pub struct DEX {
-    id: i32,
-    name: String,
+pub struct Dex {
+    pub id: i32,
+    pub name: String,
 }

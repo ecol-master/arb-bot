@@ -1,5 +1,5 @@
 [package]
-name = "uniswap-stats"
+name = "uniswap-v2"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -8,7 +8,13 @@ rust-version.workspace = true
 
 [dependencies]
 alloy.workspace = true
-tokio.workspace = true
 anyhow.workspace = true
+futures-util.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true
+async-trait.workspace = true
+
+# local
+ethereum-abi.workspace = true
+bot_db.workspace = true
+bot_math.workspace = true
+dex-common.workspace = true

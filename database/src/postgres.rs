@@ -1,4 +1,4 @@
-use crate::tables::{Pair, PairRaw, PAIRS_TABLE};
+use crate::tables::{Dex, Pair, PairRaw, DEXES_TABLE, PAIRS_TABLE};
 use alloy::primitives::Address;
 use anyhow::Result;
 use bot_config::PostgresConfig;
@@ -50,5 +50,15 @@ impl PostgresDB {
         debug_assert!(rows_affected == 1, "PostgresDB don't insert PairV2");
         tracing::info!("💵 Inserted new pair: {:?}", pair.address);
         Ok(())
+    }
+
+    pub async fn get_dex_id(&self, dex_name: &str) -> Result<i32> {
+        let query = format!("SELECT * FROM {DEXES_TABLE} WHERE name = $1");
+
+        let dex: Dex = sqlx::query_as(&query)
+            .bind(dex_name)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(dex.id)
     }
 }

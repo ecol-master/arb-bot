@@ -30,8 +30,11 @@ impl DB {
             redis.add_pair(pair).await?;
         }
 
-
         Ok(Self { redis, postgres })
+    }
+
+    pub fn postgres(&self) -> &PostgresDB {
+        &self.postgres
     }
 }
 

@@ -1,0 +1,22 @@
+[package]
+name = "bot_math"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+alloy.workspace = true
+anyhow.workspace = true
+bot_db.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+
+#local
+bot_config.workspace = true
+bot_logger.workspace = true
+ethereum-abi.workspace = true
+
+#dexes
+dex-common.workspace = true

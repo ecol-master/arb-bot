@@ -953,9 +953,9 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.86"
+version = "0.1.88"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "644dd749086bf3771a2fbc5f256fdb982d53f011c7d5d560304eafeecebce79d"
+checksum = "e539d3fca749fcee5236ab05e93a52867dd549cc157c8cb7f99595f3cedffdb5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1124,7 +1124,9 @@ dependencies = [
  "anyhow",
  "bot_config",
  "bot_db",
+ "bot_logger",
  "crossbeam",
+ "dex-common",
  "dotenv",
  "enum-iterator",
  "ethereum-abi",
@@ -1137,6 +1139,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "uniswap-v2",
 ]
 
 [[package]]
@@ -1164,6 +1167,29 @@ dependencies = [
  "sqlx",
  "tokio",
  "tokio-postgres",
+ "tracing",
+]
+
+[[package]]
+name = "bot_logger"
+version = "1.7.1"
+dependencies = [
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "bot_math"
+version = "1.7.1"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "bot_config",
+ "bot_db",
+ "bot_logger",
+ "dex-common",
+ "ethereum-abi",
+ "tokio",
  "tracing",
 ]
 
@@ -1549,6 +1575,15 @@ dependencies = [
  "quote",
  "syn 2.0.98",
  "unicode-xid",
+]
+
+[[package]]
+name = "dex-common"
+version = "1.7.1"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "async-trait",
 ]
 
 [[package]]
@@ -4574,17 +4609,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
-name = "uniswap-stats"
+name = "uniswap-v2"
 version = "1.7.1"
 dependencies = [
  "alloy",
  "anyhow",
+ "async-trait",
+ "bot_db",
+ "bot_math",
+ "dex-common",
  "ethereum-abi",
- "serde",
- "serde_json",
- "tokio",
+ "futures-util",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

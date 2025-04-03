@@ -23,7 +23,12 @@ crossbeam.workspace = true
 dotenv.workspace = true
 hashbrown.workspace = true
 
-#
+# local
 ethereum-abi.workspace = true
 bot_db.workspace = true
 bot_config.workspace = true
+bot_logger.workspace = true
+
+# dexes
+uniswap-v2.workspace = true
+dex-common.workspace = true

@@ -13,8 +13,11 @@ members = [
     "config",
     "contracts/rust/ethereum-abi",
     "database",
+    "dexes/common",
+    "dexes/uniswap-v2",
+    "logger",
+    "math",
     "strategies",
-    "uniswap-stats",
 ]
 
 [workspace.dependencies]
@@ -42,6 +45,7 @@ sqlx = { version = "0.8.3", features = ["runtime-tokio", "postgres"] }
 redis = { version = "0.29.2", features = ["tokio-comp"] }
 bb8 = { version = "0.9.0" }
 bb8-redis = { version = "0.21.0" }
+async-trait = { version = "0.1.88" }
 
 # local deps
 bot = { path = "bot", default-features = false }
@@ -49,3 +53,9 @@ strategies = { path = "strategies", default-features = false }
 ethereum-abi = { path = "contracts/rust/ethereum-abi" }
 bot_db = { path = "database" }
 bot_config = { path = "config" }
+bot_math = { path = "math" }
+bot_logger = { path = "logger" }
+
+# dexes
+uniswap-v2 = { path = "dexes/uniswap-v2" }
+dex-common = { path = "dexes/common" }

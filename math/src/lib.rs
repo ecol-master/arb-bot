@@ -1,15 +1,17 @@
-use crate::utils::get_reserves;
-use alloy::dyn_abi::abi::token;
+use alloy::dyn_abi::parser::RootType;
 use alloy::primitives::{address, Address, Uint};
 use alloy::providers::RootProvider;
 use anyhow::Result;
-use bot_db::{tables::DEX, DB};
+use bot_db::DB;
+use dex_common::DEX;
 use std::ops::{Div, Mul};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tracing;
 
 type P = Arc<RootProvider>;
+async fn fetch_reserves(pair_adr: Address, provider: P) -> Result<(Uint<112, 2>, Uint<112, 2>)> {
+    Ok((Uint::from(0), Uint::from(0)))
+}
 
 const USDT: Address = address!("0xdAC17F958D2ee523a2206206994597C13D831ec7");
 
@@ -19,41 +21,25 @@ const DEX_ID: i32 = 1;
 
 pub async fn find_triangular_arbitrage(
     updated_tokens: &[Address],
-    database: DB,
-    provider: P,
+    dex: Box<dyn DEX>,
 ) -> Result<Vec<(Address, Address, Address)>> {
     let mut paths = Vec::new();
 
     let mut requests = 0usize;
 
     for token0 in updated_tokens.iter() {
-        let adjacent_for_token0 = database.adjacent(DEX_ID, token0).await?;
+        let adjacent_for_token0 = dex.adjacent(token0).await?;
 
         for token1 in adjacent_for_token0.iter() {
-            let adjacent_for_token1 = database.adjacent(DEX_ID, token1).await?;
-
-            for token2 in adjacent_for_token1.iter() {
+            for token2 in dex.adjacent(token1).await?.iter() {
                 if adjacent_for_token0.contains(token2) && requests <= MAX_REQUEST_PER_BLOCK {
-                    // TODO: choose better approach
                     if (token0 == token1 || token0 == token2 || token1 == token2) {
                         continue;
                     }
                     let mut reserves = Vec::<(Uint<112, 2>, Uint<112, 2>)>::new();
 
                     for (t0, t1) in vec![(token0, token1), (token1, token2), (token2, token0)] {
-                        if let Ok(r) = database.reserves(DEX_ID, t0, t1).await {
-                            reserves.push(r);
-                        } else {
-                            let pair_adr = database.pair_adr(DEX_ID, t0, t1).await?;
-                            let data = get_reserves(&pair_adr, provider.clone()).await?;
-
-                            let (r0, r1) = if *t0 < *t1 {
-                                (data.0, data.1)
-                            } else {
-                                (data.1, data.0)
-                            };
-                            database.update_reserves(DEX_ID, t0, t1, r0, r1).await?;
-                        }
+                        reserves.push(dex.token_reserves(t0, t1).await?);
                     }
 
                     if arbitrage_exists(&reserves) {
@@ -151,13 +137,11 @@ mod tests {
     use std::sync::Arc;
     use tracing::Level;
 
-    use crate::logger::init_logger;
-
     use super::*;
 
     #[tokio::test]
     async fn test_price_log_correctness() -> Result<()> {
-        init_logger(tracing::Level::INFO);
+        bot_logger::init_logger(tracing::Level::INFO);
 
         let config = Config::load("../config.json".into())?;
         let provider = Arc::new(
@@ -193,7 +177,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_choose_amount_in() -> Result<()> {
-        init_logger(Level::INFO);
+        bot_logger::init_logger(Level::INFO);
         // let token0 = address!("0xA2b4C0Af19cC16a6CfAcCe81F192B024d625817D");
         // let token1 = address!("0x514cdb9cd8A2fb2BdCf7A3b8DDd098CaF466E548");
         // let token2 = address!("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2");
