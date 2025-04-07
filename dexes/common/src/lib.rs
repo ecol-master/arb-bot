@@ -11,10 +11,19 @@ pub trait DEX: Send + Sync {
 
     async fn fetch_reserves(&self, pair_adr: &Address) -> Result<Reserves>;
 
+    // check that current pair is from this dex
+    async fn owns_pair(&self, pair_adr: &Address) -> Result<bool>;
+
     // required db methods
     async fn adjacent(&self, token: &Address) -> Result<HashSet<Address>>;
 
     // returns (r0, r1) where r0 - reserve token0 in pair with token1. same for token1
     // coming (token0, token) may be in any order
     async fn token_reserves(&self, token0: &Address, token1: &Address) -> Result<Reserves>;
+}
+
+#[derive(Clone, Debug)]
+pub struct AddressBook {
+    pub factory: Address,
+    pub router: Address,
 }

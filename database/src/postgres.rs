@@ -9,12 +9,12 @@ use tokio_postgres::NoTls;
 pub struct PostgresDB {
     pool: Pool<Postgres>,
 }
-
 impl PostgresDB {
     pub async fn connect(config: &PostgresConfig) -> Result<Self> {
         let conn_data = config.sqlx_connection();
-        tracing::info!("postgres connection data: {conn_data:?}");
+
         let pool = sqlx::PgPool::connect(&conn_data).await?;
+        tracing::info!("(postgres): successfully connect on: {conn_data:?}");
 
         Ok(Self { pool })
     }
@@ -33,7 +33,7 @@ impl PostgresDB {
             .collect())
     }
 
-    pub async fn insert_pair(&self, pair: &Pair) -> Result<()> {
+    pub async fn insert_pair(&self, pair: Pair) -> Result<()> {
         let query = format!(
             "INSERT INTO {PAIRS_TABLE} (address, dex_id, token0, token1) VALUES ($1, $2, $3, $4)"
         );
@@ -48,7 +48,12 @@ impl PostgresDB {
             .rows_affected();
 
         debug_assert!(rows_affected == 1, "PostgresDB don't insert PairV2");
-        tracing::info!("💵 Inserted new pair: {:?}", pair.address);
+
+        tracing::info!(
+            "(postgres 🐘): inserted new pair: {:?} on dex: {}",
+            pair.address,
+            pair.dex_id
+        );
         Ok(())
     }
 

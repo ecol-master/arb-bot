@@ -20,7 +20,7 @@ sol!(
 sol!(
     #[allow(missing_docs)]
     #[sol(rpc)]
-    IUniswaV2Factory,
+    IUniswapV2Factory,
     "../../abi/IUniswapV2Factory.json"
 );
 

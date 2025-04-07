@@ -4,6 +4,7 @@ use crate::tables::{Pair, PairRaw};
 use alloy::{
     dyn_abi::abi::token,
     primitives::{Address, Uint},
+    rlp::bytes,
 };
 use anyhow::{anyhow, Result};
 use bb8_redis::RedisConnectionManager;
@@ -11,17 +12,23 @@ use bot_config::RedisConfig;
 use redis::AsyncCommands;
 use std::collections::HashSet;
 
-const BYTES: usize = Uint::<112, 2>::BYTES;
+const BYTES_U112: usize = Uint::<112, 2>::BYTES;
+const BYTES_U256: usize = Uint::<256, 4>::BYTES;
 
 #[derive(Clone, Debug)]
 pub struct RedisDB {
     pool: bb8::Pool<RedisConnectionManager>,
 }
-
+// source: database/src/redis.rs
 impl RedisDB {
     pub async fn connect(config: &RedisConfig) -> Result<Self> {
+        let conn_data = config.into_connection();
+
         let manager = RedisConnectionManager::new(config.into_connection())?;
         let pool = bb8::Pool::builder().build(manager).await?;
+
+        tracing::info!("(redis 🛡️): successfully connect on {conn_data}");
+
         Ok(Self { pool })
     }
 }
@@ -53,6 +60,11 @@ impl RedisDB {
             format!("pair:{dex_id}:{token1}:{token0}")
         }
     }
+
+    /// key: "k_last:{dex_id}:{pair_address}}"
+    pub fn key_k_last(dex_id: i32, pair_address: &Address) -> String {
+        format!("k_last:{dex_id}:{pair_address}")
+    }
 }
 
 impl RedisDB {
@@ -83,6 +95,13 @@ impl RedisDB {
         let _: () = conn
             .sadd(key_token1_adjacent, &pair.token0.as_slice())
             .await?;
+
+        tracing::info!(
+            "(redis 🛡️): add on dex={} new pair: {}",
+            pair.dex_id,
+            pair.address
+        );
+
         Ok(())
     }
 
@@ -146,11 +165,32 @@ impl RedisDB {
         let key_token0 = Self::key_token_reserves(dex_id, token0, token1);
         let key_token1 = Self::key_token_reserves(dex_id, token1, token0);
 
-        let reserve0_be: [u8; BYTES] = reserve0.to_be_bytes();
-        let reserve1_be: [u8; BYTES] = reserve1.to_be_bytes();
+        let reserve0_be: [u8; BYTES_U112] = reserve0.to_be_bytes();
+        let reserve1_be: [u8; BYTES_U112] = reserve1.to_be_bytes();
 
         let _: () = conn.set(key_token0, &reserve0_be).await?;
         let _: () = conn.set(key_token1, &reserve1_be).await?;
+
+        tracing::info!(
+            "(redis 🛡️): update reserves on dex={dex_id} for token0: {token0}, token1: {token1}"
+        );
+        Ok(())
+    }
+
+    pub async fn update_k_last(
+        &self,
+        dex_id: i32,
+        pair_adr: &Address,
+        k: Uint<256, 4>,
+    ) -> Result<()> {
+        let mut conn = self.pool.get().await?;
+
+        let key = Self::key_k_last(dex_id, pair_adr);
+        let bytes_be: [u8; BYTES_U256] = k.to_be_bytes();
+
+        let _: () = conn.set(key, &bytes_be).await?;
+
+        tracing::info!("(redis 🛡️): update on dex={dex_id} update kLast: {k} for pair: {pair_adr}");
         Ok(())
     }
 
@@ -164,12 +204,20 @@ impl RedisDB {
         let key_token0 = Self::key_token_reserves(dex_id, token0, token1);
         let key_token1 = Self::key_token_reserves(dex_id, token1, token0);
 
-        let reserve0_bytes: [u8; BYTES] = conn.get(key_token0).await?;
-        let reserve1_bytes: [u8; BYTES] = conn.get(key_token1).await?;
+        let reserve0_bytes: [u8; BYTES_U112] = conn.get(key_token0).await?;
+        let reserve1_bytes: [u8; BYTES_U112] = conn.get(key_token1).await?;
 
         Ok((
             Uint::<112, 2>::from_be_bytes(reserve0_bytes),
             Uint::<112, 2>::from_be_bytes(reserve1_bytes),
         ))
+    }
+
+    pub async fn k_last(&self, dex_id: i32, pair_adr: &Address) -> Result<Uint<256, 4>> {
+        let mut conn = self.pool.get().await?;
+        let key = Self::key_k_last(dex_id, pair_adr);
+        let bytes: [u8; BYTES_U256] = conn.get(key).await?;
+
+        Ok(Uint::<256, 4>::from_be_bytes(bytes))
     }
 }

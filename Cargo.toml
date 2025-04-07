@@ -13,7 +13,7 @@ members = [
     "config",
     "contracts/rust/ethereum-abi",
     "database",
-    "dexes/common",
+    "dexes/common", "dexes/sushi-swap",
     "dexes/uniswap-v2",
     "logger",
     "math",
