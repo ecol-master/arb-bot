@@ -5,15 +5,12 @@ use alloy::{
     sol_types::SolEvent,
 };
 use anyhow::Result;
-use bot_db::{
-    tables::{Dex, Pair},
-    DB,
-};
+use bot_db::{tables::Pair, DB};
 use bot_math::cpmm::{find_profit, find_triangular_arbitrage, ArbitrageData};
 use dex_common::{AddressBook, Reserves, DEX};
-use ethereum_abi::{IUniswapV2Factory, IUniswapV2Pair};
+use ethereum_abi::IUniswapV2Pair;
 use futures_util::StreamExt;
-use std::{collections::HashSet, hash::Hash, sync::Arc};
+use std::{collections::HashSet, sync::Arc};
 
 const DEX_NAME: &str = "uniswap_v2";
 
@@ -116,8 +113,6 @@ impl UniswapV2 {
 
             let amount_out_usd_str = amount_out_usd.to_string();
             let amount_out_usd: f64 = amount_out_usd_str.parse().ok()?;
-
-            let pair = self.db.pair_adr(self.dex_id, token, stable).await.ok()?;
 
             if *stable == USDT || *stable == USDC {
                 return Some((amount_in_usd / 1_000_000.0, amount_out_usd / 1_000_000.0));

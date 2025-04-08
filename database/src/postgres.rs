@@ -2,8 +2,7 @@ use crate::tables::{Dex, Pair, PairRaw, DEXES_TABLE, PAIRS_TABLE};
 use alloy::primitives::Address;
 use anyhow::Result;
 use bot_config::PostgresConfig;
-use sqlx::{Executor, Pool, Postgres};
-use tokio_postgres::NoTls;
+use sqlx::{Pool, Postgres};
 
 #[derive(Clone)]
 pub struct PostgresDB {

@@ -1,11 +1,6 @@
-use alloy::primitives::{address, Address, Uint};
-use alloy::providers::RootProvider;
+use alloy::primitives::{Address, Uint};
 use anyhow::Result;
-use bot_db::DB;
 use dex_common::{Reserves, DEX};
-use std::ops::{Div, Mul};
-use std::sync::Arc;
-use tracing;
 
 //  Pair reserves with `k`
 #[derive(Clone, Debug)]
@@ -26,7 +21,7 @@ pub async fn find_triangular_arbitrage(
         for token1 in adjacent_for_token0.iter() {
             for token2 in dex.adjacent(token1).await?.iter() {
                 if adjacent_for_token0.contains(token2) {
-                    if (token0 == token1 || token0 == token2 || token1 == token2) {
+                    if token0 == token1 || token0 == token2 || token1 == token2 {
                         continue;
                     }
 
@@ -116,22 +111,13 @@ pub fn find_profit(data: &[ArbitrageData]) -> Option<Profit> {
 }
 
 fn optimal_amount_in_bin_search(
-    pair_reserves: &[(Uint<112, 2>, Uint<112, 2>)],
+    _pair_reserves: &[(Uint<112, 2>, Uint<112, 2>)],
 ) -> Option<Uint<256, 4>> {
-    let mut amount_in = Uint::<256, 4>::from(1);
+    let mut _amount_in = Uint::<256, 4>::from(1);
     None
 }
 
 mod tests {
-    use alloy::{
-        primitives::address,
-        providers::{ProviderBuilder, WsConnect},
-    };
-    use bot_config::Config;
-    use ethereum_abi::IUniswapV2Pair;
-    use std::sync::Arc;
-    use tracing::Level;
-
     use super::*;
 
     #[tokio::test]

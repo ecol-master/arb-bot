@@ -1,11 +1,6 @@
-use std::ops::Add;
 
-use crate::tables::{Pair, PairRaw};
-use alloy::{
-    dyn_abi::abi::token,
-    primitives::{Address, Uint},
-    rlp::bytes,
-};
+use crate::tables::Pair;
+use alloy::primitives::{Address, Uint};
 use anyhow::{anyhow, Result};
 use bb8_redis::RedisConnectionManager;
 use bot_config::RedisConfig;
@@ -119,13 +114,6 @@ impl RedisDB {
             }
             Err(_) => return Err(anyhow!("think about fetching data")),
         }
-
-        let addresses: [u8; 40] = conn.get(key).await?;
-
-        Ok((
-            Address::from_slice(&addresses[0..20]),
-            Address::from_slice(&addresses[20..40]),
-        ))
     }
 
     pub async fn pair_adr(
