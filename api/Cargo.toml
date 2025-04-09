@@ -1,0 +1,11 @@
+[package]
+name = "api"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tokio.workspace = true
+anyhow.workspace = true

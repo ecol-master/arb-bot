@@ -8,7 +8,7 @@ rust-version = "1.84"
 [workspace]
 resolver = "2"
 
-members = [
+members = [ "api",
     "bot",
     "config",
     "contracts/rust/ethereum-abi",
