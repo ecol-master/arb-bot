@@ -1,4 +1,3 @@
-
 use crate::tables::Pair;
 use alloy::primitives::{Address, Uint};
 use anyhow::{anyhow, Result};
@@ -54,11 +53,6 @@ impl RedisDB {
         } else {
             format!("pair:{dex_id}:{token1}:{token0}")
         }
-    }
-
-    /// key: "k_last:{dex_id}:{pair_address}}"
-    pub fn key_k_last(dex_id: i32, pair_address: &Address) -> String {
-        format!("k_last:{dex_id}:{pair_address}")
     }
 }
 
@@ -165,23 +159,6 @@ impl RedisDB {
         Ok(())
     }
 
-    pub async fn update_k_last(
-        &self,
-        dex_id: i32,
-        pair_adr: &Address,
-        k: Uint<256, 4>,
-    ) -> Result<()> {
-        let mut conn = self.pool.get().await?;
-
-        let key = Self::key_k_last(dex_id, pair_adr);
-        let bytes_be: [u8; BYTES_U256] = k.to_be_bytes();
-
-        let _: () = conn.set(key, &bytes_be).await?;
-
-        tracing::info!("(redis 🛡️): update on dex={dex_id} update kLast: {k} for pair: {pair_adr}");
-        Ok(())
-    }
-
     pub async fn reserves(
         &self,
         dex_id: i32,
@@ -199,13 +176,5 @@ impl RedisDB {
             Uint::<112, 2>::from_be_bytes(reserve0_bytes),
             Uint::<112, 2>::from_be_bytes(reserve1_bytes),
         ))
-    }
-
-    pub async fn k_last(&self, dex_id: i32, pair_adr: &Address) -> Result<Uint<256, 4>> {
-        let mut conn = self.pool.get().await?;
-        let key = Self::key_k_last(dex_id, pair_adr);
-        let bytes: [u8; BYTES_U256] = conn.get(key).await?;
-
-        Ok(Uint::<256, 4>::from_be_bytes(bytes))
     }
 }

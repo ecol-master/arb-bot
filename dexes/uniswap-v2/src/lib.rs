@@ -61,30 +61,6 @@ impl UniswapV2 {
         })
     }
 
-    pub async fn k_last(&self, pair_adr: &Address) -> Result<Uint<256, 4>> {
-        self.db.k_last(self.dex_id, pair_adr).await
-    }
-
-    pub async fn k_last_by_tokens(
-        &self,
-        token0: &Address,
-        token1: &Address,
-    ) -> Result<Uint<256, 4>> {
-        let pair_adr = self.db.pair_adr(self.dex_id, token0, token1).await?;
-        self.k_last(&pair_adr).await
-    }
-
-    // TODO: consider to rename this method
-    pub async fn update_k_last(&self, pair_adr: &Address) -> Result<()> {
-        let instance = IUniswapV2Pair::new(*pair_adr, self.provider.clone());
-        let k_last = instance.kLast().call().await?._0;
-        if k_last.is_zero() {
-            tracing::info!("(uniswap-v2): kLast is zero for {pair_adr}");
-        }
-
-        self.db.update_k_last(self.dex_id, pair_adr, k_last).await
-    }
-
     pub async fn price_to_usd(
         &self,
         token: &Address,
@@ -134,6 +110,8 @@ impl UniswapV2 {
 #[async_trait::async_trait]
 impl DEX for UniswapV2 {
     async fn adjacent(&self, token: &Address) -> Result<HashSet<Address>> {
+        let instance = ethereum_abi::IERC20::new(token.clone(), self.provider.clone());
+        let ticket = instance.symbol().call().await?._0;
         self.db.adjacent(self.dex_id, &token).await
     }
 
@@ -167,8 +145,6 @@ impl DEX for UniswapV2 {
                 self.db
                     .update_reserves(self.dex_id, token0, token1, r0, r1)
                     .await?;
-
-                // self.update_k_last(&pair_adr).await?;
 
                 Ok((r0, r1))
             }
@@ -210,7 +186,6 @@ impl DEX for UniswapV2 {
 
                 updated_tokens.push(token0);
                 updated_tokens.push(token1);
-                //self.update_k_last(&sync.address).await?;
             }
 
             let dex = Box::new(self.clone());
@@ -225,8 +200,6 @@ impl DEX for UniswapV2 {
                 let mut arbitrages_data = Vec::new();
 
                 for tokens in &path {
-                    //let k_last = self.k_last_by_tokens(&tokens.0, &tokens.1).await?;
-
                     arbitrages_data.push(ArbitrageData {
                         reserves: self.token_reserves(&tokens.0, &tokens.1).await?,
                         fee: Uint::from(3),
