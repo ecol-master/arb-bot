@@ -1,4 +1,7 @@
-use alloy::primitives::{Address, Uint};
+use alloy::{
+    primitives::{Address, Uint},
+    rpc::types::Header,
+};
 use anyhow::Result;
 use std::collections::HashSet;
 
@@ -7,7 +10,10 @@ pub type Reserves = (Uint<112, 2>, Uint<112, 2>);
 #[async_trait::async_trait]
 pub trait DEX: Send + Sync {
     // start the process of
-    async fn run(&self) -> Result<()>;
+    //async fn run(&self) -> Result<()>;
+
+    // instead of run
+    async fn on_block(&self, header: Header) -> Result<()>;
 
     async fn fetch_reserves(&self, pair_adr: &Address) -> Result<Reserves>;
 
@@ -26,4 +32,15 @@ pub trait DEX: Send + Sync {
 pub struct AddressBook {
     pub factory: Address,
     pub router: Address,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DexError {
+    #[error("Max rpc request per block: {0}")]
+    BlockRpcLimitExceed(u64),
+}
+
+#[derive(Clone, Debug)]
+pub struct DexBlockContext {
+    rpc_requests: u64,
 }

@@ -1,4 +1,6 @@
-use crate::tables::{Dex, Pair, PairRaw, DEXES_TABLE, PAIRS_TABLE};
+use crate::tables::{
+    Dex, Pair, PairRaw, Ticker, TickerRaw, DEXES_TABLE, PAIRS_TABLE, TICKERS_TABLE,
+};
 use alloy::primitives::Address;
 use anyhow::Result;
 use bot_config::PostgresConfig;
@@ -33,9 +35,8 @@ impl PostgresDB {
     }
 
     pub async fn insert_pair(&self, pair: Pair) -> Result<()> {
-        let query = format!(
-            "INSERT INTO {PAIRS_TABLE} (address, dex_id, token0, token1) VALUES ($1, $2, $3, $4)"
-        );
+        let query =
+            format!("INSERT INTO {PAIRS_TABLE} (address, dex_id, token0, token1) VALUES ($1, $2, $3, $4)");
 
         let rows_affected = sqlx::query(&query)
             .bind(&pair.address.as_slice())
@@ -64,5 +65,32 @@ impl PostgresDB {
             .fetch_one(&self.pool)
             .await?;
         Ok(dex.id)
+    }
+
+    pub async fn insert_ticker(&self, ticker: Ticker) -> Result<()> {
+        let query = format!("INSERT INTO {TICKERS_TABLE} (token, ticker) VALUES ($1, $2)");
+        let rows_affected = sqlx::query(&query)
+            .bind(ticker.token.as_slice())
+            .bind(ticker.ticker)
+            .execute(&self.pool)
+            .await?
+            .rows_affected();
+
+        debug_assert!(rows_affected == 1, "Insert token rows affected not equal 1");
+        Ok(())
+    }
+
+    pub async fn get_token_ticker(&self, token: &Address) -> Result<Ticker> {
+        let query = format!("SELECT * FROM {TICKERS_TABLE} WHERE token = $1");
+
+        let ticker: TickerRaw = sqlx::query_as(&query)
+            .bind(token.as_slice())
+            .fetch_one(&self.pool)
+            .await?;
+
+        Ok(Ticker {
+            token: Address::from_slice(&ticker.token),
+            ticker: ticker.ticker,
+        })
     }
 }

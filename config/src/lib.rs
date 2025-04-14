@@ -42,6 +42,7 @@ impl RedisConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    pub bot_name: String,
     pub rpc_url: String,
     pub postgres: PostgresConfig,
     pub redis: RedisConfig,

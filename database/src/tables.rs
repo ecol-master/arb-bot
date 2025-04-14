@@ -2,6 +2,7 @@ use alloy::primitives::Address;
 
 pub const PAIRS_TABLE: &str = "trading_pairs";
 pub const DEXES_TABLE: &str = "dexes";
+pub const TICKERS_TABLE: &str = "token_tickers";
 
 #[derive(Debug, Clone)]
 pub struct Pair {
@@ -24,4 +25,16 @@ pub struct PairRaw {
 pub struct Dex {
     pub id: i32,
     pub name: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct Ticker {
+    pub token: Address,
+    pub ticker: String,
+}
+
+#[derive(Clone, Debug, sqlx::FromRow)]
+pub struct TickerRaw {
+    pub token: [u8; 20],
+    pub ticker: String,
 }

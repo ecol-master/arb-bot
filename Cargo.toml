@@ -8,12 +8,14 @@ rust-version = "1.84"
 [workspace]
 resolver = "2"
 
-members = [ "api",
+members = [
+    "api",
     "bot",
     "config",
     "contracts/rust/ethereum-abi",
     "database",
-    "dexes/common", "dexes/sushi-swap",
+    "dexes/common",
+    "dexes/sushi-swap",
     "dexes/uniswap-v2",
     "logger",
     "math",
@@ -46,6 +48,7 @@ redis = { version = "0.29.2", features = ["tokio-comp"] }
 bb8 = { version = "0.9.0" }
 bb8-redis = { version = "0.21.0" }
 async-trait = { version = "0.1.88" }
+thiserror = { version = "2.0.12" }
 
 # local deps
 bot = { path = "bot", default-features = false }

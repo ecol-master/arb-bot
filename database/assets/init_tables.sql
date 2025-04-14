@@ -13,7 +13,11 @@ CREATE TABLE
         FOREIGN KEY (dex_id) REFERENCES dexes (id) ON DELETE CASCADE
     );
 
-INSERT INTO trading_pairs (address, dex_id, token0, token1)
-SELECT p.address, e.id, p.token0, p.token1
-FROM pairs_v2 p
-JOIN dexes e ON e.name = 'uniswap_v2';  
+CREATE TABLE
+    token_tickers (token BYTEA PRIMARY KEY, ticker TEXT NOT NULL);
+
+-- Migrate table
+-- INSERT INTO trading_pairs (address, dex_id, token0, token1)
+-- SELECT p.address, e.id, p.token0, p.token1
+-- FROM pairs_v2 p
+-- JOIN dexes e ON e.name = 'uniswap_v2';

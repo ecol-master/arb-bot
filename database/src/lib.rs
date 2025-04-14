@@ -3,12 +3,10 @@ use std::ops::Deref;
 use anyhow::Result;
 use bot_config::Config;
 
-// pub mod mem_db;
 pub mod postgres;
 pub mod redis;
 pub mod tables;
 
-// pub use mem_db::*;
 pub use postgres::*;
 
 #[derive(Clone)]

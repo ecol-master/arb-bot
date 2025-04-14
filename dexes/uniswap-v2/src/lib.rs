@@ -1,15 +1,18 @@
 use alloy::{
     primitives::{address, Address, Uint},
     providers::{Provider, RootProvider},
-    rpc::types::Filter,
+    rpc::types::{Filter, Header},
     sol_types::SolEvent,
 };
 use anyhow::Result;
-use bot_db::{tables::Pair, DB};
+use bot_db::{
+    tables::{Pair, Ticker},
+    DB,
+};
 use bot_math::cpmm::{find_profit, find_triangular_arbitrage, ArbitrageData};
 use dex_common::{AddressBook, Reserves, DEX};
-use ethereum_abi::IUniswapV2Pair;
-use futures_util::StreamExt;
+use ethereum_abi::{IUniswapV2Pair, IERC20};
+use futures_util::{Stream, StreamExt};
 use std::{collections::HashSet, sync::Arc};
 
 const DEX_NAME: &str = "uniswap_v2";
@@ -104,6 +107,24 @@ impl UniswapV2 {
 
         None
     }
+
+    async fn add_pair(&self, pair: Pair) -> Result<()> {
+        self.db.add_pair(pair.clone()).await?;
+        self.db.postgres().insert_pair(pair.clone()).await?;
+
+        for token in vec![pair.token0, pair.token1] {
+            if self.db.postgres().get_token_ticker(&token).await.is_err() {
+                let instance = IERC20::new(token, self.provider.clone());
+                let ticker = Ticker {
+                    token,
+                    ticker: instance.symbol().call().await?._0,
+                };
+                self.db.postgres().insert_ticker(ticker).await?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 // Run function for uniswap-v2, method drop structure, because after running there is no need to use
@@ -151,93 +172,158 @@ impl DEX for UniswapV2 {
         }
     }
 
-    async fn run(&self) -> Result<()> {
-        let filter = Filter::new().event_signature(IUniswapV2Pair::Sync::SIGNATURE_HASH);
-        let mut stream = self.provider.subscribe_blocks().await?.into_stream();
+    async fn on_block(&self, header: Header) -> Result<()> {
+        let filter = Filter::new()
+            .event_signature(IUniswapV2Pair::Sync::SIGNATURE_HASH)
+            .from_block(header.number);
 
-        while let Some(header) = stream.next().await {
-            tracing::info!("⚡ block {:?}", header.number);
-            let f = filter.clone().from_block(header.number);
+        let mut updated_tokens = vec![];
 
-            let mut updated_tokens = vec![];
-            for log in self.provider.get_logs(&f).await? {
-                let sync = IUniswapV2Pair::Sync::decode_log(&log.inner, false)?;
+        for log in self.provider.get_logs(&filter).await? {
+            let sync = IUniswapV2Pair::Sync::decode_log(&log.inner, false)?;
 
-                if !self.owns_pair(&sync.address).await? {
-                    tracing::info!("NOT from UniswapV2");
-                    continue;
-                }
-
-                let (token0, token1) = match self.db.pair_tokens(self.dex_id, &sync.address).await {
-                    Ok(r) => (r.0, r.1),
-                    Err(_) => {
-                        let pair = self.fetch_pair(sync.address).await?;
-
-                        self.db.add_pair(pair.clone()).await?;
-                        self.db.postgres().insert_pair(pair.clone()).await?;
-
-                        (pair.token0, pair.token1)
-                    }
-                };
-
-                self.db
-                    .update_reserves(self.dex_id, &token0, &token1, sync.reserve0, sync.reserve1)
-                    .await?;
-
-                updated_tokens.push(token0);
-                updated_tokens.push(token1);
+            if !self.owns_pair(&sync.address).await? {
+                continue;
             }
 
-            let dex = Box::new(self.clone());
-
-            // The vector of Vec<(token0, token1)>
-            let paths = find_triangular_arbitrage(&updated_tokens, dex).await?;
-            tracing::info!("(uniswap-v2): found {} arbitrage paths", paths.len());
-
-            let mut unique_first_tokens = HashSet::new();
-
-            for path in paths {
-                let mut arbitrages_data = Vec::new();
-
-                for tokens in &path {
-                    arbitrages_data.push(ArbitrageData {
-                        reserves: self.token_reserves(&tokens.0, &tokens.1).await?,
-                        fee: Uint::from(3),
-                    });
+            let (token0, token1) = match self.db.pair_tokens(self.dex_id, &sync.address).await {
+                Ok(r) => (r.0, r.1),
+                Err(_) => {
+                    let pair = self.fetch_pair(sync.address).await?;
+                    self.add_pair(pair.clone()).await;
+                    (pair.token0, pair.token1)
                 }
+            };
 
-                if let Some(profit) = find_profit(&arbitrages_data) {
-                    let first_token = path.first().unwrap().0;
+            self.db
+                .update_reserves(self.dex_id, &token0, &token1, sync.reserve0, sync.reserve1)
+                .await?;
 
-                    unique_first_tokens.insert(first_token.clone());
+            updated_tokens.push(token0);
+            updated_tokens.push(token0);
+        }
 
-                    if first_token == USDT {
-                        let profit_str = profit.1.to_string();
-                        let usd: f64 = profit_str.parse().unwrap();
+        let paths = find_triangular_arbitrage(&updated_tokens, Box::new(self.clone())).await?;
+        tracing::info!("(uniswap-v2): found arbitrage paths: {}", paths.len());
+
+        for path in paths {
+            let mut arbitrages_data = Vec::new();
+
+            for tokens in &path {
+                arbitrages_data.push(ArbitrageData {
+                    reserves: self.token_reserves(&tokens.0, &tokens.1).await?,
+                    fee: Uint::from(3),
+                });
+            }
+
+            if let Some(profit) = find_profit(&arbitrages_data) {
+                let first_token = path.first().unwrap().0;
+
+                // unique_first_tokens.insert(first_token.clone());
+
+                let prices = self.price_to_usd(&first_token, profit.0, profit.1).await;
+
+                match prices {
+                    Some((amount_in_usd, amount_out_usd)) => {
                         tracing::info!(
-                            "(uniswap-v2): profit best in: {:?}, best out: {:?}$",
-                            profit.0,
-                            usd / 1_000_000.0
-                        );
-                    } else {
-                        let prices = self.price_to_usd(&first_token, profit.0, profit.1).await;
-
-                        match prices {
-                            Some((amount_in_usd, amount_out_usd)) => {
-                                tracing::info!(
                                     "(uniswap-v2): profit: best in: {amount_in_usd}$, best out: {amount_out_usd}$",
                                 );
-                            }
-                            None => {
-                                tracing::info!("(uniswap-v2): failed to calculate price in usd")
-                            }
-                        }
+                    }
+                    None => {
+                        tracing::info!("(uniswap-v2): failed to calculate price in usd")
                     }
                 }
             }
-
-            tracing::info!("unique first tokens: {unique_first_tokens:?}")
         }
+
         Ok(())
     }
+
+    // async fn run(&self) -> Result<()> {
+    //     let filter = Filter::new().event_signature(IUniswapV2Pair::Sync::SIGNATURE_HASH);
+    //     let mut stream = self.provider.subscribe_blocks().await?.into_stream();
+
+    //     while let Some(header) = stream.next().await {
+    //         tracing::info!("⚡ block {:?}", header.number);
+    //         let f = filter.clone().from_block(header.number);
+
+    //         let mut updated_tokens = vec![];
+    //         for log in self.provider.get_logs(&f).await? {
+    //             let sync = IUniswapV2Pair::Sync::decode_log(&log.inner, false)?;
+
+    //             if !self.owns_pair(&sync.address).await? {
+    //                 tracing::info!("NOT from UniswapV2");
+    //                 continue;
+    //             }
+
+    //             let (token0, token1) = match self.db.pair_tokens(self.dex_id, &sync.address).await {
+    //                 Ok(r) => (r.0, r.1),
+    //                 Err(_) => {
+    //                     let pair = self.fetch_pair(sync.address).await?;
+    //                     self.add_pair(pair.clone());
+
+    //                     (pair.token0, pair.token1)
+    //                 }
+    //             };
+
+    //             self.db
+    //                 .update_reserves(self.dex_id, &token0, &token1, sync.reserve0, sync.reserve1)
+    //                 .await?;
+
+    //             updated_tokens.push(token0);
+    //             updated_tokens.push(token1);
+    //         }
+
+    //         let dex = Box::new(self.clone());
+
+    //         // The vector of Vec<(token0, token1)>
+    //         let paths = find_triangular_arbitrage(&updated_tokens, dex).await?;
+    //         tracing::info!("(uniswap-v2): found {} arbitrage paths", paths.len());
+
+    //         let mut unique_first_tokens = HashSet::new();
+
+    //         for path in paths {
+    //             let mut arbitrages_data = Vec::new();
+
+    //             for tokens in &path {
+    //                 arbitrages_data.push(ArbitrageData {
+    //                     reserves: self.token_reserves(&tokens.0, &tokens.1).await?,
+    //                     fee: Uint::from(3),
+    //                 });
+    //             }
+
+    //             if let Some(profit) = find_profit(&arbitrages_data) {
+    //                 let first_token = path.first().unwrap().0;
+
+    //                 unique_first_tokens.insert(first_token.clone());
+
+    //                 if first_token == USDT {
+    //                     let profit_str = profit.1.to_string();
+    //                     let usd: f64 = profit_str.parse().unwrap();
+    //                     tracing::info!(
+    //                         "(uniswap-v2): profit best in: {:?}, best out: {:?}$",
+    //                         profit.0,
+    //                         usd / 1_000_000.0
+    //                     );
+    //                 } else {
+    //                     let prices = self.price_to_usd(&first_token, profit.0, profit.1).await;
+
+    //                     match prices {
+    //                         Some((amount_in_usd, amount_out_usd)) => {
+    //                             tracing::info!(
+    //                                 "(uniswap-v2): profit: best in: {amount_in_usd}$, best out: {amount_out_usd}$",
+    //                             );
+    //                         }
+    //                         None => {
+    //                             tracing::info!("(uniswap-v2): failed to calculate price in usd")
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+
+    //         tracing::info!("unique first tokens: {unique_first_tokens:?}")
+    //     }
+    //     Ok(())
+    // }
 }

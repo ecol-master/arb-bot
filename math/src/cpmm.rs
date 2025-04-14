@@ -10,12 +10,12 @@ pub struct ArbitrageData {
 }
 
 pub async fn find_triangular_arbitrage(
-    stablecoins: &[Address],
+    start_tokens: &[Address],
     dex: Box<dyn DEX>,
 ) -> Result<Vec<Vec<(Address, Address)>>> {
     let mut paths = vec![];
 
-    for token0 in stablecoins {
+    for token0 in start_tokens {
         let adjacent_for_token0 = dex.adjacent(token0).await?;
 
         for token1 in adjacent_for_token0.iter() {

@@ -8,7 +8,6 @@ rust-version.workspace = true
 
 [dependencies]
 alloy.workspace = true
-tokio-postgres.workspace = true
 tokio.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
@@ -22,3 +21,4 @@ bb8-redis.workspace = true
 #
 ethereum-abi.workspace = true
 bot_config.workspace = true
+bot_logger.workspace = true
