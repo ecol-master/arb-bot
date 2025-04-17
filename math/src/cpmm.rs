@@ -1,6 +1,6 @@
 use alloy::primitives::{Address, Uint};
 use anyhow::Result;
-use dex_common::{Reserves, DEX};
+use dex_common::{DexError, Reserves, DEX};
 
 //  Pair reserves with `k`
 #[derive(Clone, Debug)]
@@ -19,7 +19,7 @@ pub async fn find_triangular_arbitrage(
         let adjacent_for_token0 = dex.adjacent(token0).await?;
 
         for token1 in adjacent_for_token0.iter() {
-            for token2 in dex.adjacent(token1).await?.iter() {
+            'iter: for token2 in dex.adjacent(token1).await?.iter() {
                 if adjacent_for_token0.contains(token2) {
                     if token0 == token1 || token0 == token2 || token1 == token2 {
                         continue;
@@ -29,7 +29,18 @@ pub async fn find_triangular_arbitrage(
 
                     let tokens = vec![(*token0, *token1), (*token1, *token2), (*token2, *token0)];
                     for (t0, t1) in tokens.iter() {
-                        reserves.push(dex.token_reserves(t0, t1).await?);
+                        let token_reserves = match dex.token_reserves(t0, t1).await {
+                            Ok(reserves) => reserves,
+                            Err(err) => {
+                                if let Some(DexError::BlockRpcLimitExceed) =
+                                    err.downcast_ref::<DexError>()
+                                {
+                                    continue 'iter;
+                                }
+                                return Err(err);
+                            }
+                        };
+                        reserves.push(token_reserves);
                     }
 
                     let fee = Uint::from(3);
@@ -89,12 +100,6 @@ pub fn find_profit(data: &[ArbitrageData]) -> Option<Profit> {
         for d in data {
             amount_out = calculate_dy(d, amount_in);
         }
-
-        // tracing::info!(
-        //     "start in: {:?}, after loop swap: {:?}",
-        //     start_amount_in,
-        //     amount_in
-        // );
 
         if amount_out > amount_in {
             let profit = amount_out - amount_in;

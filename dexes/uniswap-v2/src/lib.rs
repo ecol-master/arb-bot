@@ -10,12 +10,29 @@ use bot_db::{
     DB,
 };
 use bot_math::cpmm::{find_profit, find_triangular_arbitrage, ArbitrageData};
-use dex_common::{AddressBook, Reserves, DEX};
+use dex_common::{AddressBook, DexError, Reserves, DEX};
 use ethereum_abi::{IUniswapV2Pair, IERC20};
-use futures_util::{Stream, StreamExt};
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::HashSet,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+};
 
 const DEX_NAME: &str = "uniswap_v2";
+const MAX_REQUESTS_PER_BLOCK: usize = 50;
+static REQUESTS_PER_BLOCK: AtomicUsize = AtomicUsize::new(0);
+
+pub fn request_wrapper(inc: usize) -> Result<()> {
+    if REQUESTS_PER_BLOCK.load(Ordering::Relaxed) >= MAX_REQUESTS_PER_BLOCK {
+        tracing::info!("reach requests limit per block");
+        return Err(DexError::BlockRpcLimitExceed.into());
+    }
+
+    REQUESTS_PER_BLOCK.fetch_add(inc, Ordering::Relaxed);
+    Ok(())
+}
 
 type P = Arc<RootProvider>;
 
@@ -25,7 +42,7 @@ pub struct UniswapV2 {
     address_book: AddressBook,
 
     db: DB,
-    provider: P,
+    provider: Arc<RootProvider>,
 }
 
 const USDT: Address = address!("0xdAC17F958D2ee523a2206206994597C13D831ec7");
@@ -43,6 +60,7 @@ impl UniswapV2 {
             router: address!("0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"),
         };
 
+        tracing::info!("Uniswap-V2 successfully created");
         Ok(Self {
             dex_id,
             address_book,
@@ -52,12 +70,16 @@ impl UniswapV2 {
     }
 
     pub async fn fetch_pair(&self, pair_adr: Address) -> Result<Pair> {
+        request_wrapper(1usize)?;
+
         let instance = IUniswapV2Pair::new(pair_adr.clone(), self.provider.clone());
         let token0 = instance.token0().call().await?._0;
         let token1 = instance.token1().call().await?._0;
 
         Ok(Pair {
             address: pair_adr,
+            // TODO: replace here with better checking
+            // Now it is ok, because of method 'owns_pairs'
             dex_id: self.dex_id,
             token0,
             token1,
@@ -87,11 +109,8 @@ impl UniswapV2 {
             let amount_out_usd =
                 amount_out * Uint::<256, 4>::from(r_stable) / Uint::<256, 4>::from(r_token);
 
-            let amount_in_usd_str = amount_in_usd.to_string();
-            let amount_in_usd: f64 = amount_in_usd_str.parse().ok()?;
-
-            let amount_out_usd_str = amount_out_usd.to_string();
-            let amount_out_usd: f64 = amount_out_usd_str.parse().ok()?;
+            let amount_in_usd: f64 = amount_in_usd.to_string().parse().ok()?;
+            let amount_out_usd: f64 = amount_out_usd.to_string().parse().ok()?;
 
             if *stable == USDT || *stable == USDC {
                 return Some((amount_in_usd / 1_000_000.0, amount_out_usd / 1_000_000.0));
@@ -127,16 +146,14 @@ impl UniswapV2 {
     }
 }
 
-// Run function for uniswap-v2, method drop structure, because after running there is no need to use
 #[async_trait::async_trait]
 impl DEX for UniswapV2 {
     async fn adjacent(&self, token: &Address) -> Result<HashSet<Address>> {
-        let instance = ethereum_abi::IERC20::new(token.clone(), self.provider.clone());
-        let ticket = instance.symbol().call().await?._0;
         self.db.adjacent(self.dex_id, &token).await
     }
 
     async fn fetch_reserves(&self, pair_adr: &Address) -> Result<Reserves> {
+        request_wrapper(1usize)?;
         let instance = IUniswapV2Pair::new(*pair_adr, self.provider.clone());
         let reserves = instance.getReserves().call().await?;
         Ok((reserves.reserve0, reserves.reserve1))
@@ -144,8 +161,18 @@ impl DEX for UniswapV2 {
 
     // TODO: think about correctness this
     async fn owns_pair(&self, pair_adr: &Address) -> Result<bool> {
-        let instance = IUniswapV2Pair::new(*pair_adr, self.provider.clone());
-        Ok(instance.factory().call().await?._0 == self.address_book.factory)
+        match self.db.postgres().get_pair_dex_id(pair_adr).await {
+            Ok(pair_dex_id) => Ok(pair_dex_id == self.dex_id),
+            Err(err) => {
+                if let Some(sqlx_err) = err.downcast_ref::<sqlx::Error>() {
+                    if matches!(sqlx_err, sqlx::Error::RowNotFound) {
+                        let instance = IUniswapV2Pair::new(*pair_adr, self.provider.clone());
+                        return Ok(instance.factory().call().await?._0 == self.address_book.factory);
+                    }
+                }
+                return Err(err);
+            }
+        }
     }
 
     async fn token_reserves(&self, token0: &Address, token1: &Address) -> Result<Reserves> {
@@ -173,6 +200,10 @@ impl DEX for UniswapV2 {
     }
 
     async fn on_block(&self, header: Header) -> Result<()> {
+        tracing::info!("handle new block: {}", header.number);
+        // TODO: maybe chhose better approach for ordering
+        REQUESTS_PER_BLOCK.store(0usize, Ordering::Relaxed);
+
         let filter = Filter::new()
             .event_signature(IUniswapV2Pair::Sync::SIGNATURE_HASH)
             .from_block(header.number);
@@ -190,7 +221,7 @@ impl DEX for UniswapV2 {
                 Ok(r) => (r.0, r.1),
                 Err(_) => {
                     let pair = self.fetch_pair(sync.address).await?;
-                    self.add_pair(pair.clone()).await;
+                    self.add_pair(pair.clone()).await?;
                     (pair.token0, pair.token1)
                 }
             };
@@ -235,7 +266,7 @@ impl DEX for UniswapV2 {
                 }
             }
         }
-
+        tracing::info!("block processing finished");
         Ok(())
     }
 

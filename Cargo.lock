@@ -4547,7 +4547,7 @@ dependencies = [
  "bot_math",
  "dex-common",
  "ethereum-abi",
- "futures-util",
+ "sqlx",
  "tracing",
 ]
 

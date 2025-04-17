@@ -35,8 +35,9 @@ impl PostgresDB {
     }
 
     pub async fn insert_pair(&self, pair: Pair) -> Result<()> {
-        let query =
-            format!("INSERT INTO {PAIRS_TABLE} (address, dex_id, token0, token1) VALUES ($1, $2, $3, $4)");
+        let query = format!(
+            "INSERT INTO {PAIRS_TABLE} (address, dex_id, token0, token1) VALUES ($1, $2, $3, $4)"
+        );
 
         let rows_affected = sqlx::query(&query)
             .bind(&pair.address.as_slice())
@@ -55,6 +56,17 @@ impl PostgresDB {
             pair.dex_id
         );
         Ok(())
+    }
+
+    pub async fn get_pair_dex_id(&self, pair_adr: &Address) -> Result<i32> {
+        let query = format!("SELECT * FROM {PAIRS_TABLE} WHERE address = $1");
+
+        let pair: PairRaw = sqlx::query_as(&query)
+            .bind(&pair_adr.as_slice())
+            .fetch_one(&self.pool)
+            .await?;
+
+        Ok(pair.dex_id)
     }
 
     pub async fn get_dex_id(&self, dex_name: &str) -> Result<i32> {

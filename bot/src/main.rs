@@ -1,10 +1,10 @@
 use anyhow::Result;
 
-use alloy::providers::{Provider, ProviderBuilder, RootProvider};
+use alloy::providers::{Provider, ProviderBuilder};
 use bot_config::Config;
 use bot_db::DB;
 use dex_common::DEX;
-use futures_util::{Stream, StreamExt};
+use futures_util::StreamExt;
 use std::sync::Arc;
 
 #[tokio::main]

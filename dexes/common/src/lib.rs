@@ -36,11 +36,6 @@ pub struct AddressBook {
 
 #[derive(Debug, thiserror::Error)]
 pub enum DexError {
-    #[error("Max rpc request per block: {0}")]
-    BlockRpcLimitExceed(u64),
-}
-
-#[derive(Clone, Debug)]
-pub struct DexBlockContext {
-    rpc_requests: u64,
+    #[error("Max rpc request per block")]
+    BlockRpcLimitExceed,
 }
