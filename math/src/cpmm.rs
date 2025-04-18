@@ -2,7 +2,6 @@ use alloy::primitives::{Address, Uint};
 use anyhow::Result;
 use dex_common::{DexError, Reserves, DEX};
 
-//  Pair reserves with `k`
 #[derive(Clone, Debug)]
 pub struct ArbitrageData {
     pub reserves: Reserves,

@@ -28,6 +28,7 @@ ethereum-abi.workspace = true
 bot_db.workspace = true
 bot_config.workspace = true
 bot_logger.workspace = true
+bot_executor.workspace = true
 
 # dexes
 uniswap-v2.workspace = true

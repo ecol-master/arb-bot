@@ -1,22 +1,18 @@
 [package]
-name = "uniswap-v2"
+name = "bot_executor"
+edition.workspace = true
 version.workspace = true
 authors.workspace = true
-edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
 alloy.workspace = true
 anyhow.workspace = true
-tracing.workspace = true
-async-trait.workspace = true
-sqlx.workspace = true
-hashbrown.workspace = true
 crossbeam.workspace = true
-
-# local
-ethereum-abi.workspace = true
-bot_db.workspace = true
 bot_math.workspace = true
+tracing.workspace = true
+#
+bot_db.workspace = true
 dex-common.workspace = true
+ethereum-abi.workspace = true

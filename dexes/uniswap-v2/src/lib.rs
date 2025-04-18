@@ -10,10 +10,13 @@ use bot_db::{
     DB,
 };
 use bot_math::cpmm::{find_profit, find_triangular_arbitrage, ArbitrageData};
-use dex_common::{AddressBook, DexError, Reserves, DEX};
+use crossbeam::channel::Sender;
+use dex_common::{AddressBook, Arbitrage, DexError, Reserves, DEX};
 use ethereum_abi::{IUniswapV2Pair, IERC20};
+use hashbrown::{hash_map::Entry, HashMap};
 use std::{
     collections::HashSet,
+    hash::Hash,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -41,18 +44,13 @@ pub struct UniswapV2 {
     dex_id: i32,
     address_book: AddressBook,
 
+    s: Sender<Arbitrage>,
     db: DB,
     provider: Arc<RootProvider>,
 }
 
-const USDT: Address = address!("0xdAC17F958D2ee523a2206206994597C13D831ec7");
-const USDC: Address = address!("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
-const DAI: Address = address!("0x6B175474E89094C44Da98b954EedeAC495271d0F");
-
-const STABLE_COINS: [Address; 3] = [DAI, USDC, USDT];
-
 impl UniswapV2 {
-    pub async fn new(db: DB, provider: P) -> Result<Self> {
+    pub async fn new(s: Sender<Arbitrage>, db: DB, provider: P) -> Result<Self> {
         let dex_id = db.postgres().get_dex_id(DEX_NAME).await?;
 
         let address_book = AddressBook {
@@ -64,6 +62,7 @@ impl UniswapV2 {
         Ok(Self {
             dex_id,
             address_book,
+            s,
             db,
             provider,
         })
@@ -86,47 +85,6 @@ impl UniswapV2 {
         })
     }
 
-    pub async fn price_to_usd(
-        &self,
-        token: &Address,
-        amount_in: Uint<256, 4>,
-        amount_out: Uint<256, 4>,
-    ) -> Option<(f64, f64)> {
-        let adjacent = self.adjacent(token).await.ok()?;
-        for stable in STABLE_COINS.iter() {
-            if !adjacent.contains(stable) {
-                continue;
-            }
-            let reserves = self.token_reserves(token, stable).await.ok()?;
-            let (r_token, r_stable) = if *token < *stable {
-                (reserves.0, reserves.1)
-            } else {
-                (reserves.1, reserves.0)
-            };
-            let amount_in_usd =
-                amount_in * Uint::<256, 4>::from(r_stable) / Uint::<256, 4>::from(r_token);
-
-            let amount_out_usd =
-                amount_out * Uint::<256, 4>::from(r_stable) / Uint::<256, 4>::from(r_token);
-
-            let amount_in_usd: f64 = amount_in_usd.to_string().parse().ok()?;
-            let amount_out_usd: f64 = amount_out_usd.to_string().parse().ok()?;
-
-            if *stable == USDT || *stable == USDC {
-                return Some((amount_in_usd / 1_000_000.0, amount_out_usd / 1_000_000.0));
-            }
-            if *stable == DAI {
-                return Some((
-                    amount_in_usd / 1_000_000_000_000_000_000.0,
-                    amount_out_usd / 1_000_000_000_000_000_000.0,
-                ));
-            }
-            return None;
-        }
-
-        None
-    }
-
     async fn add_pair(&self, pair: Pair) -> Result<()> {
         self.db.add_pair(pair.clone()).await?;
         self.db.postgres().insert_pair(pair.clone()).await?;
@@ -143,6 +101,49 @@ impl UniswapV2 {
         }
 
         Ok(())
+    }
+
+    async fn best_arbitrages(
+        &self,
+        paths: Vec<Vec<(Address, Address)>>,
+    ) -> Result<HashMap<Address, Arbitrage>> {
+        let mut best_arbitrages: HashMap<Address, Arbitrage> = HashMap::new();
+
+        for path in paths.into_iter() {
+            let mut data = Vec::new();
+            for tokens in &path {
+                data.push(ArbitrageData {
+                    reserves: self.token_reserves(&tokens.0, &tokens.1).await?,
+                    fee: Uint::from(3),
+                });
+            }
+
+            if let Some(profit) = find_profit(&data) {
+                match best_arbitrages.entry(path[0].0) {
+                    Entry::Occupied(mut entry) => {
+                        let arbitrage = entry.get_mut();
+                        if arbitrage.revenue < profit.1 - profit.0 {
+                            *arbitrage = Arbitrage {
+                                dex_id: self.dex_id,
+                                amount_in: profit.0,
+                                revenue: profit.1 - profit.0,
+                                path: path.clone(),
+                            }
+                        }
+                    }
+                    Entry::Vacant(entry) => {
+                        entry.insert(Arbitrage {
+                            dex_id: self.dex_id,
+                            amount_in: profit.0,
+                            revenue: profit.1 - profit.0,
+                            path: path.clone(),
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(best_arbitrages)
     }
 }
 
@@ -184,10 +185,9 @@ impl DEX for UniswapV2 {
                 let reserves = self.fetch_reserves(&pair_adr).await?;
 
                 // correct order of tokens
-                let (r0, r1) = if *token0 < *token1 {
-                    (reserves.0, reserves.1)
-                } else {
-                    (reserves.1, reserves.0)
+                let (r0, r1) = match *token0 < *token1 {
+                    true => (reserves.0, reserves.1),
+                    false => (reserves.1, reserves.0),
                 };
 
                 self.db
@@ -237,124 +237,13 @@ impl DEX for UniswapV2 {
         let paths = find_triangular_arbitrage(&updated_tokens, Box::new(self.clone())).await?;
         tracing::info!("(uniswap-v2): found arbitrage paths: {}", paths.len());
 
-        for path in paths {
-            let mut arbitrages_data = Vec::new();
+        let best_arbitrages = self.best_arbitrages(paths).await?;
+        tracing::info!("best arbitrages: {best_arbitrages:?}");
 
-            for tokens in &path {
-                arbitrages_data.push(ArbitrageData {
-                    reserves: self.token_reserves(&tokens.0, &tokens.1).await?,
-                    fee: Uint::from(3),
-                });
-            }
-
-            if let Some(profit) = find_profit(&arbitrages_data) {
-                let first_token = path.first().unwrap().0;
-
-                // unique_first_tokens.insert(first_token.clone());
-
-                let prices = self.price_to_usd(&first_token, profit.0, profit.1).await;
-
-                match prices {
-                    Some((amount_in_usd, amount_out_usd)) => {
-                        tracing::info!(
-                                    "(uniswap-v2): profit: best in: {amount_in_usd}$, best out: {amount_out_usd}$",
-                                );
-                    }
-                    None => {
-                        tracing::info!("(uniswap-v2): failed to calculate price in usd")
-                    }
-                }
-            }
+        for arbitrage in best_arbitrages.into_values() {
+            self.s.send(arbitrage);
         }
-        tracing::info!("block processing finished");
+
         Ok(())
     }
-
-    // async fn run(&self) -> Result<()> {
-    //     let filter = Filter::new().event_signature(IUniswapV2Pair::Sync::SIGNATURE_HASH);
-    //     let mut stream = self.provider.subscribe_blocks().await?.into_stream();
-
-    //     while let Some(header) = stream.next().await {
-    //         tracing::info!("⚡ block {:?}", header.number);
-    //         let f = filter.clone().from_block(header.number);
-
-    //         let mut updated_tokens = vec![];
-    //         for log in self.provider.get_logs(&f).await? {
-    //             let sync = IUniswapV2Pair::Sync::decode_log(&log.inner, false)?;
-
-    //             if !self.owns_pair(&sync.address).await? {
-    //                 tracing::info!("NOT from UniswapV2");
-    //                 continue;
-    //             }
-
-    //             let (token0, token1) = match self.db.pair_tokens(self.dex_id, &sync.address).await {
-    //                 Ok(r) => (r.0, r.1),
-    //                 Err(_) => {
-    //                     let pair = self.fetch_pair(sync.address).await?;
-    //                     self.add_pair(pair.clone());
-
-    //                     (pair.token0, pair.token1)
-    //                 }
-    //             };
-
-    //             self.db
-    //                 .update_reserves(self.dex_id, &token0, &token1, sync.reserve0, sync.reserve1)
-    //                 .await?;
-
-    //             updated_tokens.push(token0);
-    //             updated_tokens.push(token1);
-    //         }
-
-    //         let dex = Box::new(self.clone());
-
-    //         // The vector of Vec<(token0, token1)>
-    //         let paths = find_triangular_arbitrage(&updated_tokens, dex).await?;
-    //         tracing::info!("(uniswap-v2): found {} arbitrage paths", paths.len());
-
-    //         let mut unique_first_tokens = HashSet::new();
-
-    //         for path in paths {
-    //             let mut arbitrages_data = Vec::new();
-
-    //             for tokens in &path {
-    //                 arbitrages_data.push(ArbitrageData {
-    //                     reserves: self.token_reserves(&tokens.0, &tokens.1).await?,
-    //                     fee: Uint::from(3),
-    //                 });
-    //             }
-
-    //             if let Some(profit) = find_profit(&arbitrages_data) {
-    //                 let first_token = path.first().unwrap().0;
-
-    //                 unique_first_tokens.insert(first_token.clone());
-
-    //                 if first_token == USDT {
-    //                     let profit_str = profit.1.to_string();
-    //                     let usd: f64 = profit_str.parse().unwrap();
-    //                     tracing::info!(
-    //                         "(uniswap-v2): profit best in: {:?}, best out: {:?}$",
-    //                         profit.0,
-    //                         usd / 1_000_000.0
-    //                     );
-    //                 } else {
-    //                     let prices = self.price_to_usd(&first_token, profit.0, profit.1).await;
-
-    //                     match prices {
-    //                         Some((amount_in_usd, amount_out_usd)) => {
-    //                             tracing::info!(
-    //                                 "(uniswap-v2): profit: best in: {amount_in_usd}$, best out: {amount_out_usd}$",
-    //                             );
-    //                         }
-    //                         None => {
-    //                             tracing::info!("(uniswap-v2): failed to calculate price in usd")
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-
-    //         tracing::info!("unique first tokens: {unique_first_tokens:?}")
-    //     }
-    //     Ok(())
-    // }
 }

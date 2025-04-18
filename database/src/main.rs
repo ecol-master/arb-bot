@@ -34,5 +34,6 @@ async fn main() -> Result<()> {
         }
     }
 
+    tracing::info!("All tickers check!");
     Ok(())
 }

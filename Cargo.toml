@@ -19,7 +19,8 @@ members = [
     "dexes/uniswap-v2",
     "logger",
     "math",
-    "strategies",
+    "mev",
+    "executor",
 ]
 
 [workspace.dependencies]
@@ -52,12 +53,12 @@ thiserror = { version = "2.0.12" }
 
 # local deps
 bot = { path = "bot", default-features = false }
-strategies = { path = "strategies", default-features = false }
 ethereum-abi = { path = "contracts/rust/ethereum-abi" }
 bot_db = { path = "database" }
 bot_config = { path = "config" }
 bot_math = { path = "math" }
 bot_logger = { path = "logger" }
+bot_executor = { path = "executor" }
 
 # dexes
 uniswap-v2 = { path = "dexes/uniswap-v2" }
