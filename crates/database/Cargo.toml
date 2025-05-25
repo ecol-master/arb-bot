@@ -1,0 +1,28 @@
+[package]
+name = "bot_db"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+alloy.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+hashbrown.workspace = true
+sqlx.workspace = true
+serde.workspace = true
+redis.workspace = true
+bb8.workspace = true
+bb8-redis.workspace = true
+
+#
+ethereum-abi.workspace = true
+bot_config.workspace = true
+bot_logger.workspace = true
+
+
+dex-common.workspace = true

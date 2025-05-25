@@ -9,18 +9,18 @@ rust-version = "1.84"
 resolver = "2"
 
 members = [
-    "api",
+    "crates/api",
     "bot",
-    "config",
+    "crates/config",
     "contracts/rust/ethereum-abi",
-    "database",
-    "dexes/common",
-    "dexes/sushi-swap",
-    "dexes/uniswap-v2",
-    "logger",
-    "math",
-    "mev",
-    "executor",
+    "crates/database",
+    "crates/dexes/common",
+    "crates/dexes/sushi-swap",
+    "crates/dexes/uniswap-v2",
+    "crates/logger",
+    "crates/math",
+    "crates/mev",
+    "crates/executor",
 ]
 
 [workspace.dependencies]
@@ -35,7 +35,7 @@ alloy = { version = "0.12.4", features = [
     "node-bindings",
 ] }
 futures-util = "0.3"
-serde_json = "1.0.137"
+serde_yaml = "0.9"
 serde = "1.0.217"
 hex = "0.4.3"
 tracing-appender = "0.2.3"
@@ -50,16 +50,18 @@ bb8 = { version = "0.9.0" }
 bb8-redis = { version = "0.21.0" }
 async-trait = { version = "0.1.88" }
 thiserror = { version = "2.0.12" }
+mev-share = "0.1.4"
 
 # local deps
-bot = { path = "bot", default-features = false }
+bot = { path = "crates/bot", default-features = false }
 ethereum-abi = { path = "contracts/rust/ethereum-abi" }
-bot_db = { path = "database" }
-bot_config = { path = "config" }
-bot_math = { path = "math" }
-bot_logger = { path = "logger" }
-bot_executor = { path = "executor" }
+bot_db = { path = "crates/database" }
+bot_config = { path = "crates/config" }
+bot_math = { path = "crates/math" }
+bot_logger = { path = "crates/logger" }
+bot_executor = { path = "crates/executor" }
+bot_mev = { path = "crates/mev" }
 
 # dexes
-uniswap-v2 = { path = "dexes/uniswap-v2" }
-dex-common = { path = "dexes/common" }
+uniswap-v2 = { path = "crates/dexes/uniswap-v2" }
+dex-common = { path = "crates/dexes/common" }

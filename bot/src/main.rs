@@ -12,8 +12,10 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() -> Result<()> {
     bot_logger::init_logger(tracing::Level::INFO);
+    tracing::info!("i am started");
 
-    let config = Config::load("./config.json".into())?;
+    let config = Config::load("./config.yml".into())?;
+    tracing::info!("config: {config:?}");
 
     let provider = Arc::new(ProviderBuilder::default().connect(&config.rpc_url).await?);
     let database = DB::new(config).await?;

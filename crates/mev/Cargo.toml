@@ -1,0 +1,19 @@
+[package]
+name = "bot_mev"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tokio.workspace = true
+anyhow.workspace = true
+mev-share.workspace = true
+alloy.workspace = true
+futures-util.workspace = true
+tracing.workspace = true
+
+#
+bot_config.workspace = true
+bot_logger.workspace = true
