@@ -4,6 +4,7 @@ pub const PAIRS_TABLE: &str = "trading_pairs";
 pub const DEXES_TABLE: &str = "dexes";
 pub const TICKERS_TABLE: &str = "token_tickers";
 
+/// `Pair` represents the trading pair in DEX
 #[derive(Debug, Clone)]
 pub struct Pair {
     pub address: Address,

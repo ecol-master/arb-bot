@@ -1,5 +1,5 @@
 [package]
-name = "bot_executor"
+name = "kronos-executor"
 edition.workspace = true
 version.workspace = true
 authors.workspace = true
@@ -10,9 +10,12 @@ rust-version.workspace = true
 alloy.workspace = true
 anyhow.workspace = true
 crossbeam.workspace = true
-bot_math.workspace = true
+kronos-math.workspace = true
 tracing.workspace = true
+futures.workspace = true
+tokio.workspace = true
+
 #
-bot_db.workspace = true
-dex-common.workspace = true
+kronos-db.workspace = true
 ethereum-abi.workspace = true
+kronos-dexes.workspace = true

@@ -1,10 +1,10 @@
 use crate::tables::Pair;
-use std::{collections::HashSet, ops::Deref};
+use std::collections::HashSet;
 
-use alloy::primitives::{Address, Uint};
+use alloy::primitives::Address;
 use anyhow::Result;
-use bot_config::Config;
-use dex_common::Reserves;
+use kronos_common::Reserves;
+use kronos_config::Config;
 
 pub mod postgres;
 pub mod redis;
@@ -19,7 +19,6 @@ pub struct UpdateReservesData {
 }
 
 // Traits
-
 #[async_trait::async_trait]
 pub trait PricesStorage {
     async fn reserves(&self, dex_id: i32, token0: &Address, token1: &Address) -> Result<Reserves>;
@@ -29,6 +28,8 @@ pub trait PricesStorage {
 
 #[async_trait::async_trait]
 pub trait TokensGraphStorage {
+    async fn add_pair(&self, pair: Pair) -> Result<()>;
+
     async fn adjacent_tokens(&self, dex_id: i32, token: &Address) -> Result<HashSet<Address>>;
 
     async fn pair_by_tokens(&self, dex_id: i32, pair_adr: &Address) -> Result<(Address, Address)>;
@@ -44,7 +45,7 @@ pub struct DB {
 }
 
 impl DB {
-    pub async fn new(config: Config) -> Result<DB> {
+    pub async fn from_config(config: &Config) -> Result<DB> {
         let postgres = postgres::PostgresDB::connect(&config.postgres).await?;
         let redis = redis::RedisDB::connect(&config.redis).await?;
 
@@ -59,12 +60,8 @@ impl DB {
         Ok(Self { redis, postgres })
     }
 
-    pub async fn add_pair(&self, pair: Pair) -> Result<()> {
-        self.redis.add_pair(pair).await
-    }
-
-    pub fn postgres(&self) -> &PostgresDB {
-        &self.postgres
+    pub fn postgres(&self) -> PostgresDB {
+        self.postgres.clone()
     }
 }
 
@@ -90,8 +87,13 @@ impl PricesStorage for DB {
 
 #[async_trait::async_trait]
 impl TokensGraphStorage for DB {
+    async fn add_pair(&self, pair: Pair) -> Result<()> {
+        self.redis.add_pair(pair.clone()).await?;
+        self.postgres.insert_pair(pair).await
+    }
+
     async fn adjacent_tokens(&self, dex_id: i32, token: &Address) -> Result<HashSet<Address>> {
-        self.adjacent_tokens(dex_id, token).await
+        self.redis.adjacent(dex_id, token).await
     }
 
     async fn pair_by_tokens(&self, dex_id: i32, pair_adr: &Address) -> Result<(Address, Address)> {

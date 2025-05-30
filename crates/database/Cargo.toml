@@ -1,5 +1,5 @@
 [package]
-name = "bot_db"
+name = "kronos-db"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -21,8 +21,9 @@ bb8-redis.workspace = true
 
 #
 ethereum-abi.workspace = true
-bot_config.workspace = true
-bot_logger.workspace = true
+kronos-config.workspace = true
+kronos-logger.workspace = true
 
 
-dex-common.workspace = true
+# kronos-dexes.workspace = true
+kronos-common.workspace = true

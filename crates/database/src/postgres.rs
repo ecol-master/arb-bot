@@ -3,7 +3,7 @@ use crate::tables::{
 };
 use alloy::primitives::Address;
 use anyhow::Result;
-use bot_config::PostgresConfig;
+use kronos_config::PostgresConfig;
 use sqlx::{Pool, Postgres};
 
 #[derive(Clone)]
@@ -15,8 +15,8 @@ impl PostgresDB {
         let conn_data = config.sqlx_connection();
 
         let pool = sqlx::PgPool::connect(&conn_data).await?;
-        tracing::info!("(postgres): successfully connect on: {conn_data:?}");
 
+        tracing::info!("🐘 Successfully connect to postgres on: {conn_data:?}");
         Ok(Self { pool })
     }
 
@@ -40,18 +40,18 @@ impl PostgresDB {
         );
 
         let rows_affected = sqlx::query(&query)
-            .bind(&pair.address.as_slice())
+            .bind(pair.address.as_slice())
             .bind(pair.dex_id)
-            .bind(&pair.token0.as_slice())
-            .bind(&pair.token1.as_slice())
+            .bind(pair.token0.as_slice())
+            .bind(pair.token1.as_slice())
             .execute(&self.pool)
             .await?
             .rows_affected();
 
         debug_assert!(rows_affected == 1, "PostgresDB don't insert PairV2");
 
-        tracing::info!(
-            "(postgres 🐘): inserted new pair: {:?} on dex: {}",
+        tracing::trace!(
+            "inserted new pair: {:?} on dex: {}",
             pair.address,
             pair.dex_id
         );
@@ -62,7 +62,7 @@ impl PostgresDB {
         let query = format!("SELECT * FROM {PAIRS_TABLE} WHERE address = $1");
 
         let pair: PairRaw = sqlx::query_as(&query)
-            .bind(&pair_adr.as_slice())
+            .bind(pair_adr.as_slice())
             .fetch_one(&self.pool)
             .await?;
 

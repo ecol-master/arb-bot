@@ -14,13 +14,15 @@ members = [
     "crates/config",
     "contracts/rust/ethereum-abi",
     "crates/database",
-    "crates/dexes/common",
-    "crates/dexes/sushi-swap",
-    "crates/dexes/uniswap-v2",
+    "crates/dexes",
+    "crates/dexes",
+    "crates/dexes",
     "crates/logger",
     "crates/math",
     "crates/mev",
     "crates/executor",
+    "crates/dexes",
+    "crates/common",
 ]
 
 [workspace.dependencies]
@@ -33,6 +35,7 @@ alloy = { version = "0.12.4", features = [
     "provider-anvil-api",
     "rpc-client-ipc",
     "node-bindings",
+    "pubsub",
 ] }
 futures-util = "0.3"
 serde_yaml = "0.9"
@@ -51,17 +54,19 @@ bb8-redis = { version = "0.21.0" }
 async-trait = { version = "0.1.88" }
 thiserror = { version = "2.0.12" }
 mev-share = "0.1.4"
+futures = "0.3.31"
+derive_more = "2.0.1"
 
 # local deps
-bot = { path = "crates/bot", default-features = false }
+kronos = { path = "crates/bot", default-features = false }
 ethereum-abi = { path = "contracts/rust/ethereum-abi" }
-bot_db = { path = "crates/database" }
-bot_config = { path = "crates/config" }
-bot_math = { path = "crates/math" }
-bot_logger = { path = "crates/logger" }
-bot_executor = { path = "crates/executor" }
-bot_mev = { path = "crates/mev" }
+kronos-db = { path = "crates/database" }
+kronos-config = { path = "crates/config" }
+kronos-math = { path = "crates/math" }
+kronos-logger = { path = "crates/logger" }
+kronos-executor = { path = "crates/executor" }
+kronos-mev = { path = "crates/mev" }
+kronos-common = { path = "crates/common" }
 
 # dexes
-uniswap-v2 = { path = "crates/dexes/uniswap-v2" }
-dex-common = { path = "crates/dexes/common" }
+kronos-dexes = { path = "crates/dexes" }

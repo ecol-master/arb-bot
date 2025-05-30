@@ -1,5 +1,5 @@
 [package]
-name = "bot_logger"
+name = "kronos-logger"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

@@ -1,5 +1,5 @@
 [package]
-name = "uniswap-v2"
+name = "kronos-dexes"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -14,9 +14,12 @@ async-trait.workspace = true
 sqlx.workspace = true
 hashbrown.workspace = true
 crossbeam.workspace = true
+thiserror.workspace = true
+futures.workspace = true
+tokio.workspace = true
 
 # local
 ethereum-abi.workspace = true
-bot_db.workspace = true
-bot_math.workspace = true
-dex-common.workspace = true
+kronos-db.workspace = true
+kronos-math.workspace = true
+kronos-common.workspace = true

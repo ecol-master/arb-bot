@@ -1,52 +1,46 @@
 use anyhow::Result;
 
 use alloy::providers::{Provider, ProviderBuilder};
-use bot_config::Config;
-use bot_db::DB;
-use bot_executor::ArbitrageExecutor;
-use crossbeam::channel::unbounded;
-use dex_common::{Arbitrage, DEX};
 use futures_util::StreamExt;
+use kronos_config::Config;
+use kronos_db::DB;
+use kronos_dexes::uniswap_v2::UniswapV2;
+use kronos_executor::Executor;
 use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    bot_logger::init_logger(tracing::Level::INFO);
-    tracing::info!("i am started");
+    kronos_logger::init_logger(tracing::Level::INFO);
 
     let config = Config::load("./config.yml".into())?;
-    tracing::info!("config: {config:?}");
 
+    let database = DB::from_config(&config).await?;
     let provider = Arc::new(ProviderBuilder::default().connect(&config.rpc_url).await?);
-    let database = DB::new(config).await?;
 
-    let (s, r) = unbounded::<Arbitrage>();
-    let uniswap_v2 = uniswap_v2::UniswapV2::new(s, database.clone(), provider.clone()).await?;
-    let executor = ArbitrageExecutor::new(r, database.clone(), provider.clone());
+    let (blocks_tx, blocks_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (arbitrage_tx, arbitrage_rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let executor_handle = tokio::spawn(async move {
-        if let Err(err) = executor.run().await {
-            tracing::error!("Executor error: {err:?}")
+    let uniswap_v2 =
+        UniswapV2::new(database.clone(), provider.clone(), blocks_rx, arbitrage_tx).await?;
+
+    let executor = Executor::new(database.clone(), provider.clone(), arbitrage_rx);
+
+    // Create handle to start bot
+    let uniswapv2_handle = tokio::spawn(async move { uniswap_v2.start().await.unwrap() });
+
+    let executor_handle = tokio::spawn(async move { executor.start().await.unwrap() });
+
+    let blocks_handle = tokio::spawn(async move {
+        let mut stream = provider.subscribe_blocks().await.unwrap().into_stream();
+        while let Some(block) = stream.next().await {
+            tracing::info!("📦 block: {}", block.number);
+            blocks_tx.send(block).unwrap();
         }
     });
 
-    let block_handle = tokio::spawn(async move {
-        let mut stream = provider
-            .subscribe_blocks()
-            .await
-            .expect("Failed to create stream")
-            .into_stream();
-
-        while let Some(header) = stream.next().await {
-            tracing::info!("⚡️ new block {}", header.number);
-            if let Err(err) = uniswap_v2.on_block(header).await {
-                tracing::error!("uniswap-v2 error: {err:?}");
-            };
-        }
-    });
-
-    executor_handle.await;
-    block_handle.await;
+    uniswapv2_handle.await?;
+    executor_handle.await?;
+    blocks_handle.await?;
 
     return Ok(());
 }

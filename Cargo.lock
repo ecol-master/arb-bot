@@ -802,14 +802,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34ac096ce696dc2fcabef30516bb13c0a68a11d30131d3df6f04711467681b04"
 
 [[package]]
-name = "api"
-version = "1.7.1"
-dependencies = [
- "anyhow",
- "tokio",
-]
-
-[[package]]
 name = "arc-swap"
 version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1209,113 +1201,6 @@ dependencies = [
  "glob",
  "threadpool",
  "zeroize",
-]
-
-[[package]]
-name = "bot"
-version = "1.7.1"
-dependencies = [
- "alloy",
- "anyhow",
- "bot_config",
- "bot_db",
- "bot_executor",
- "bot_logger",
- "crossbeam",
- "dex-common",
- "dotenv",
- "enum-iterator",
- "ethereum-abi",
- "futures-util",
- "hashbrown 0.15.2",
- "hex",
- "serde",
- "tokio",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "uniswap-v2",
-]
-
-[[package]]
-name = "bot_config"
-version = "1.7.1"
-dependencies = [
- "anyhow",
- "serde",
- "serde_yaml",
-]
-
-[[package]]
-name = "bot_db"
-version = "1.7.1"
-dependencies = [
- "alloy",
- "anyhow",
- "async-trait",
- "bb8",
- "bb8-redis",
- "bot_config",
- "bot_logger",
- "dex-common",
- "ethereum-abi",
- "hashbrown 0.15.2",
- "redis",
- "serde",
- "sqlx",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "bot_executor"
-version = "1.7.1"
-dependencies = [
- "alloy",
- "anyhow",
- "bot_db",
- "bot_math",
- "crossbeam",
- "dex-common",
- "ethereum-abi",
- "tracing",
-]
-
-[[package]]
-name = "bot_logger"
-version = "1.7.1"
-dependencies = [
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "bot_math"
-version = "1.7.1"
-dependencies = [
- "alloy",
- "anyhow",
- "bot_config",
- "bot_db",
- "bot_logger",
- "dex-common",
- "ethereum-abi",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "bot_mev"
-version = "1.7.1"
-dependencies = [
- "alloy",
- "anyhow",
- "bot_config",
- "bot_logger",
- "futures-util",
- "mev-share",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -1791,16 +1676,6 @@ dependencies = [
  "quote",
  "syn 2.0.98",
  "unicode-xid",
-]
-
-[[package]]
-name = "dex-common"
-version = "1.7.1"
-dependencies = [
- "alloy",
- "anyhow",
- "async-trait",
- "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -3240,6 +3115,153 @@ checksum = "505d1856a39b200489082f90d897c3f07c455563880bc5952e38eabf731c83b6"
 dependencies = [
  "digest 0.10.7",
  "sha3-asm",
+]
+
+[[package]]
+name = "kronos"
+version = "1.7.1"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "crossbeam",
+ "derive_more 2.0.1",
+ "dotenv",
+ "enum-iterator",
+ "ethereum-abi",
+ "futures",
+ "futures-util",
+ "hashbrown 0.15.2",
+ "hex",
+ "kronos-config",
+ "kronos-db",
+ "kronos-dexes",
+ "kronos-executor",
+ "kronos-logger",
+ "serde",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "kronos-api"
+version = "1.7.1"
+dependencies = [
+ "anyhow",
+ "tokio",
+]
+
+[[package]]
+name = "kronos-common"
+version = "1.7.1"
+dependencies = [
+ "alloy",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "kronos-config"
+version = "1.7.1"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_yaml",
+]
+
+[[package]]
+name = "kronos-db"
+version = "1.7.1"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "async-trait",
+ "bb8",
+ "bb8-redis",
+ "ethereum-abi",
+ "hashbrown 0.15.2",
+ "kronos-common",
+ "kronos-config",
+ "kronos-logger",
+ "redis",
+ "serde",
+ "sqlx",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "kronos-dexes"
+version = "1.7.1"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "async-trait",
+ "crossbeam",
+ "ethereum-abi",
+ "futures",
+ "hashbrown 0.15.2",
+ "kronos-common",
+ "kronos-db",
+ "kronos-math",
+ "sqlx",
+ "thiserror 2.0.12",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "kronos-executor"
+version = "1.7.1"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "crossbeam",
+ "ethereum-abi",
+ "futures",
+ "kronos-db",
+ "kronos-dexes",
+ "kronos-math",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "kronos-logger"
+version = "1.7.1"
+dependencies = [
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "kronos-math"
+version = "1.7.1"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "async-trait",
+ "ethereum-abi",
+ "kronos-common",
+ "kronos-config",
+ "kronos-db",
+ "kronos-logger",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "kronos-mev"
+version = "1.7.1"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "futures-util",
+ "kronos-config",
+ "kronos-logger",
+ "mev-share",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5192,10 +5214,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
-name = "sushi-swap"
-version = "1.7.1"
-
-[[package]]
 name = "syn"
 version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5752,23 +5770,6 @@ name = "unicode-xid"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
-
-[[package]]
-name = "uniswap-v2"
-version = "1.7.1"
-dependencies = [
- "alloy",
- "anyhow",
- "async-trait",
- "bot_db",
- "bot_math",
- "crossbeam",
- "dex-common",
- "ethereum-abi",
- "hashbrown 0.15.2",
- "sqlx",
- "tracing",
-]
 
 [[package]]
 name = "unsafe-libyaml"

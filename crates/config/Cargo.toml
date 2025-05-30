@@ -1,5 +1,5 @@
 [package]
-name = "bot_config"
+name = "kronos-config"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

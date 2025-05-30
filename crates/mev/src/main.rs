@@ -4,7 +4,7 @@ use mev_share::sse::EventClient;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    bot_logger::init_logger(tracing::Level::INFO);
+    kronos_logger::init_logger(tracing::Level::INFO);
 
     let mev_share_rpc = "https://mev-share.flashbots.net";
     let client = EventClient::default();

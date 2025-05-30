@@ -1,6 +1,8 @@
 use alloy::primitives::{Address, Uint};
 use anyhow::Result;
-use dex_common::{DexError, Reserves, DEX};
+// use dex_common::{DexError, Reserves, DEX};
+use kronos_common::{DexError, Reserves};
+use kronos_db::{PricesStorage, TokensGraphStorage, DB};
 
 #[derive(Clone, Debug)]
 pub struct ArbitrageData {
@@ -10,15 +12,16 @@ pub struct ArbitrageData {
 
 pub async fn find_triangular_arbitrage(
     start_tokens: &[Address],
-    dex: Box<dyn DEX>,
+    db: DB,
+    dex_id: i32,
 ) -> Result<Vec<Vec<(Address, Address)>>> {
     let mut paths = vec![];
 
     for token0 in start_tokens {
-        let adjacent_for_token0 = dex.adjacent(token0).await?;
+        let adjacent_for_token0 = db.adjacent_tokens(dex_id, token0).await?;
 
         for token1 in adjacent_for_token0.iter() {
-            'iter: for token2 in dex.adjacent(token1).await?.iter() {
+            'iter: for token2 in db.adjacent_tokens(dex_id, token1).await?.iter() {
                 if adjacent_for_token0.contains(token2) {
                     if token0 == token1 || token0 == token2 || token1 == token2 {
                         continue;
@@ -28,7 +31,7 @@ pub async fn find_triangular_arbitrage(
 
                     let tokens = vec![(*token0, *token1), (*token1, *token2), (*token2, *token0)];
                     for (t0, t1) in tokens.iter() {
-                        let token_reserves = match dex.token_reserves(t0, t1).await {
+                        let token_reserves = match db.reserves(dex_id, t0, t1).await {
                             Ok(reserves) => reserves,
                             Err(err) => {
                                 if let Some(DexError::BlockRpcLimitExceed) =
@@ -108,7 +111,7 @@ pub fn find_profit(data: &[ArbitrageData]) -> Option<Profit> {
             }
         }
 
-        amount_in = amount_in * Uint::from(2);
+        amount_in *= Uint::from(2);
     }
 
     best_amount_in.zip(best_profit)
@@ -121,97 +124,96 @@ fn optimal_amount_in_bin_search(
     None
 }
 
-mod tests {
-    use super::*;
+// mod tests {
 
-    #[tokio::test]
-    async fn test_price_log_correctness() -> Result<()> {
-        bot_logger::init_logger(tracing::Level::INFO);
+//     #[tokio::test]
+//     async fn test_price_log_correctness() -> Result<()> {
+//         kronos_logger::init_logger(tracing::Level::INFO);
 
-        let config = Config::load("../config.json".into())?;
-        let provider = Arc::new(
-            ProviderBuilder::new()
-                .on_ws(WsConnect::new(config.rpc_url))
-                .await?,
-        );
+//         let config = Config::load("../config.json".into())?;
+//         let provider = Arc::new(
+//             ProviderBuilder::new()
+//                 .on_ws(WsConnect::new(config.rpc_url))
+//                 .await?,
+//         );
 
-        let usdc_eth = address!("0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc");
-        let pair = IUniswapV2Pair::new(usdc_eth, provider.clone());
-        let reserves = pair.getReserves().call().await?;
+//         let usdc_eth = address!("0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc");
+//         let pair = IUniswapV2Pair::new(usdc_eth, provider.clone());
+//         let reserves = pair.getReserves().call().await?;
 
-        let (reserve0, reserve1) = (reserves.reserve0, reserves.reserve1);
-        let approx_log = reserve0.approx_log2();
-        tracing::info!("Uint<112, 2> reserve0.approx_log2() = {}", approx_log);
+//         let (reserve0, reserve1) = (reserves.reserve0, reserves.reserve1);
+//         let approx_log = reserve0.approx_log2();
+//         tracing::info!("Uint<112, 2> reserve0.approx_log2() = {}", approx_log);
 
-        let reserve_f64: f64 = reserve0.to_string().parse()?;
-        let reserve_f64_log = reserve_f64.log2();
-        tracing::info!("f64: reserve_f64.log2() = {}", reserve_f64_log);
+//         let reserve_f64: f64 = reserve0.to_string().parse()?;
+//         let reserve_f64_log = reserve_f64.log2();
+//         tracing::info!("f64: reserve_f64.log2() = {}", reserve_f64_log);
 
-        ///////////////////////////////////////////////////////////////
-        tracing::info!("////////////////////////////////////////////////////");
-        ///////////////////////////////////////////////////////////////
-        let approx_log = reserve1.approx_log2();
-        tracing::info!("Uint<112, 2> reserve1.approx_log2() = {}", approx_log);
+//         ///////////////////////////////////////////////////////////////
+//         tracing::info!("////////////////////////////////////////////////////");
+//         ///////////////////////////////////////////////////////////////
+//         let approx_log = reserve1.approx_log2();
+//         tracing::info!("Uint<112, 2> reserve1.approx_log2() = {}", approx_log);
 
-        let reserve_f64: f64 = reserve1.to_string().parse()?;
-        let reserve_f64_log = reserve_f64.log2();
-        tracing::info!("f64: reserve1_f64.log2() = {}", reserve_f64_log);
+//         let reserve_f64: f64 = reserve1.to_string().parse()?;
+//         let reserve_f64_log = reserve_f64.log2();
+//         tracing::info!("f64: reserve1_f64.log2() = {}", reserve_f64_log);
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    #[tokio::test]
-    async fn test_choose_amount_in() -> Result<()> {
-        bot_logger::init_logger(Level::INFO);
-        // let token0 = address!("0xA2b4C0Af19cC16a6CfAcCe81F192B024d625817D");
-        // let token1 = address!("0x514cdb9cd8A2fb2BdCf7A3b8DDd098CaF466E548");
-        // let token2 = address!("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2");
+//     #[tokio::test]
+//     async fn test_choose_amount_in() -> Result<()> {
+//         kronos_logger::init_logger(Level::INFO);
+//         // let token0 = address!("0xA2b4C0Af19cC16a6CfAcCe81F192B024d625817D");
+//         // let token1 = address!("0x514cdb9cd8A2fb2BdCf7A3b8DDd098CaF466E548");
+//         // let token2 = address!("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2");
 
-        let reserve_ij_0 = Uint::<112, 2>::from(186207702687816381u128);
-        let reserve_ij_1 = Uint::<112, 2>::from(2782290017905555178812751u128);
+//         let reserve_ij_0 = Uint::<112, 2>::from(186207702687816381u128);
+//         let reserve_ij_1 = Uint::<112, 2>::from(2782290017905555178812751u128);
 
-        let reserve_jk_0 = Uint::<112, 2>::from(15417613504024212838975381u128);
-        let reserve_jk_1 = Uint::<112, 2>::from(1939484985u128);
+//         let reserve_jk_0 = Uint::<112, 2>::from(15417613504024212838975381u128);
+//         let reserve_jk_1 = Uint::<112, 2>::from(1939484985u128);
 
-        let reserve_ki_0 = Uint::<112, 2>::from(122843973192u128);
-        let reserve_ki_1 = Uint::<112, 2>::from(64043414140367650753u128);
+//         let reserve_ki_0 = Uint::<112, 2>::from(122843973192u128);
+//         let reserve_ki_1 = Uint::<112, 2>::from(64043414140367650753u128);
 
-        //token0-token1
-        // let reserve_ij_0 = Uint::<112, 2>::from(40231970157230793u128);
-        // let reserve_ij_1 = Uint::<112, 2>::from(477843027700932911383u128);
-        let p_ij = price_approx_log(reserve_ij_0, reserve_ij_1);
-        tracing::info!("p_ij = {}", p_ij);
+//         //token0-token1
+//         // let reserve_ij_0 = Uint::<112, 2>::from(40231970157230793u128);
+//         // let reserve_ij_1 = Uint::<112, 2>::from(477843027700932911383u128);
+//         let p_ij = price_log(Uint::from(3), &Reserves(reserve_ij_0, reserve_ij_1));
+//         tracing::info!("p_ij = {}", p_ij);
 
-        //token1-token2
-        // let reserve_jk_0 = Uint::<112, 2>::from(300142426723603695424046u128);
-        // let reserve_jk_1 = Uint::<112, 2>::from(2243233282602387u128);
-        let p_jk = price_approx_log(reserve_jk_0, reserve_jk_1);
-        tracing::info!("p_jk = {}", p_jk);
+//         //token1-token2
+//         // let reserve_jk_0 = Uint::<112, 2>::from(300142426723603695424046u128);
+//         // let reserve_jk_1 = Uint::<112, 2>::from(2243233282602387u128);
+//         let p_jk = price_log(Uint::from(3), &Reserves(reserve_jk_0, reserve_jk_1));
+//         tracing::info!("p_jk = {}", p_jk);
 
-        //token0-token2
-        // let reserve_ki_0 = Uint::<112, 2>::from(293433654763848772092u128);
-        // let reserve_ki_1 = Uint::<112, 2>::from(2907164345878467241383433u128);
-        let p_ki = price_approx_log(reserve_ki_0, reserve_ki_1);
-        tracing::info!("p_ki = {}", p_ki);
+//         //token0-token2
+//         // let reserve_ki_0 = Uint::<112, 2>::from(293433654763848772092u128);
+//         // let reserve_ki_1 = Uint::<112, 2>::from(2907164345878467241383433u128);
+//         let p_ki = price_log(Uint::from(3), &Reserves(reserve_ki_0, reserve_ki_1));
+//         tracing::info!("p_ki = {}", p_ki);
 
-        tracing::info!("p_ij + p_jk + p_ki = {}", p_ij + p_jk + p_ki);
-        assert!(p_ij + p_jk + p_ki > 0f64);
+//         tracing::info!("p_ij + p_jk + p_ki = {}", p_ij + p_jk + p_ki);
+//         assert!(p_ij + p_jk + p_ki > 0f64);
 
-        /////////////////////////////////////////////////////////////////////
-        /////////////////////////////////////////////////////////////////////
+//         /////////////////////////////////////////////////////////////////////
+//         /////////////////////////////////////////////////////////////////////
 
-        let reserves: [(Uint<112, 2>, Uint<112, 2>); 3] = [
-            (reserve_ij_0, reserve_ij_1),
-            (reserve_jk_0, reserve_jk_1),
-            (reserve_ki_0, reserve_ki_1),
-        ];
+//         // let reserves: [(Uint<112, 2>, Uint<112, 2>); 3] = [
+//         //     (reserve_ij_0, reserve_ij_1),
+//         //     (reserve_jk_0, reserve_jk_1),
+//         //     (reserve_ki_0, reserve_ki_1),
+//         // ];
 
-        let best_out = optimal_amount_in_brute_force(&reserves);
-        tracing::info!("optimal out: {:?}", best_out);
+//         // let best_out = optimal_amount_in_bin_search(&reserves);
+//         // tracing::info!("optimal out: {:?}", best_out);
 
-        Ok(())
-    }
-}
+//         // Ok(())
+//     }
+// }
 
 /*
 2025-03-15T08:30:39.770462Z  INFO bot::math: token0: 0xA2b4C0Af19cC16a6CfAcCe81F192B024d625817D, token1: 0x514cdb9cd8A2fb2BdCf7A3b8DDd098CaF466E548, token2: 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2

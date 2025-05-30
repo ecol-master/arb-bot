@@ -2,5 +2,5 @@
 **/build
 .env
 /logs
-config.json
+config.yml
 *.rdb

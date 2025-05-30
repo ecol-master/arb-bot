@@ -1,7 +1,7 @@
 use alloy::primitives::{address, Address, Uint};
 use anyhow::{anyhow, Result};
-use bot_db::{PricesStorage, TokensGraphStorage, DB};
-use dex_common::{Reserves, DEX};
+use kronos_db::{PricesStorage, TokensGraphStorage, DB};
+use kronos_common::{Reserves};
 
 pub mod cpmm;
 

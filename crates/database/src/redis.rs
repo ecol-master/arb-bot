@@ -2,7 +2,7 @@ use crate::{tables::Pair, Reserves};
 use alloy::primitives::{Address, Uint};
 use anyhow::{anyhow, Result};
 use bb8_redis::RedisConnectionManager;
-use bot_config::RedisConfig;
+use kronos_config::RedisConfig;
 use redis::AsyncCommands;
 use std::collections::HashSet;
 
@@ -16,12 +16,8 @@ pub struct RedisDB {
 
 impl RedisDB {
     pub async fn connect(config: &RedisConfig) -> Result<Self> {
-        let conn_data = config.into_connection();
-
         let manager = RedisConnectionManager::new(config.into_connection())?;
         let pool = bb8::Pool::builder().build(manager).await?;
-
-        tracing::info!("(redis 🛡️): successfully connect on {conn_data}");
 
         Ok(Self { pool })
     }
@@ -57,36 +53,36 @@ impl RedisDB {
 }
 
 impl RedisDB {
-    // Adding to redis three things:
-    // 1. mapping from pair to its tokens
-    // 2. mapping from tokens to pair address
-    // 3. setting adjacent tokens
+    /// Adding to redis three things:
+    /// 1. mapping from pair to its tokens
+    /// 2. mapping from tokens to pair address
+    /// 3. setting adjacent tokens
     pub async fn add_pair(&self, pair: Pair) -> Result<()> {
         let mut conn = self.pool.get().await?;
 
         // mapping from `pair`: `token0+token1`
         let key_tokens = Self::key_tokens(pair.dex_id, &pair.address);
         let mut addresses = [0u8; 40];
-        addresses[0..20].copy_from_slice(&pair.token0.as_slice());
-        addresses[20..40].copy_from_slice(&pair.token1.as_slice());
+        addresses[0..20].copy_from_slice(pair.token0.as_slice());
+        addresses[20..40].copy_from_slice(pair.token1.as_slice());
         let _: () = conn.set(key_tokens, &addresses).await?;
 
         // mapping from `tokens` to `pair` address
         let key_pair = Self::key_pair(pair.dex_id, &pair.token0, &pair.token1);
-        let _: () = conn.set(key_pair, &pair.address.as_slice()).await?;
+        let _: () = conn.set(key_pair, pair.address.as_slice()).await?;
 
         // addind adjacent tokens
         let key_token0_adjacent = Self::key_adjacent_tokens(pair.dex_id, &pair.token0);
         let key_token1_adjacent = Self::key_adjacent_tokens(pair.dex_id, &pair.token1);
 
         let _: () = conn
-            .sadd(key_token0_adjacent, &pair.token1.as_slice())
+            .sadd(key_token0_adjacent, pair.token1.as_slice())
             .await?;
         let _: () = conn
-            .sadd(key_token1_adjacent, &pair.token0.as_slice())
+            .sadd(key_token1_adjacent, pair.token0.as_slice())
             .await?;
 
-        tracing::info!(
+        tracing::trace!(
             "(redis 🛡️): add on dex={} new pair: {}",
             pair.dex_id,
             pair.address
@@ -105,13 +101,11 @@ impl RedisDB {
         let key = Self::key_tokens(dex_id, pair_adr);
 
         match conn.get::<String, [u8; 40]>(key).await {
-            Ok(addresses) => {
-                return Ok((
-                    Address::from_slice(&addresses[0..20]),
-                    Address::from_slice(&addresses[20..40]),
-                ))
-            }
-            Err(_) => return Err(anyhow!("think about fetching data")),
+            Ok(addresses) => Ok((
+                Address::from_slice(&addresses[0..20]),
+                Address::from_slice(&addresses[20..40]),
+            )),
+            Err(_) => Err(anyhow!("think about fetching data")),
         }
     }
 
@@ -158,9 +152,7 @@ impl RedisDB {
         let _: () = conn.set(key_token0, &reserve0_be).await?;
         let _: () = conn.set(key_token1, &reserve1_be).await?;
 
-        tracing::info!(
-            "(redis 🛡️): update reserves on dex={dex_id} for token0: {token0}, token1: {token1}"
-        );
+        tracing::trace!("update reserves on dex={dex_id} for token0: {token0}, token1: {token1}");
         Ok(())
     }
 

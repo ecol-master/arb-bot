@@ -1,5 +1,5 @@
 [package]
-name = "bot_math"
+name = "kronos-math"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -9,14 +9,16 @@ rust-version.workspace = true
 [dependencies]
 alloy.workspace = true
 anyhow.workspace = true
-bot_db.workspace = true
 tracing.workspace = true
 tokio.workspace = true
+async-trait.workspace = true
 
 #local
-bot_config.workspace = true
-bot_logger.workspace = true
+kronos-config.workspace = true
+kronos-logger.workspace = true
 ethereum-abi.workspace = true
+kronos-db.workspace = true
+kronos-common.workspace = true
 
 #dexes
-dex-common.workspace = true
+# kronos-dexes.workspace = true

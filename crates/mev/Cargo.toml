@@ -1,5 +1,5 @@
 [package]
-name = "bot_mev"
+name = "kronos-mev"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -15,5 +15,5 @@ futures-util.workspace = true
 tracing.workspace = true
 
 #
-bot_config.workspace = true
-bot_logger.workspace = true
+kronos-config.workspace = true
+kronos-logger.workspace = true

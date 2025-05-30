@@ -1,5 +1,5 @@
 [package]
-name = "bot"
+name = "kronos"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -11,7 +11,7 @@ rust-version.workspace = true
 tokio.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing = "0.1"
-alloy.workspace = true
+alloy = { workspace = true, features = ["pubsub"] }
 futures-util.workspace = true
 # serde_json.workspace = true
 serde.workspace = true
@@ -22,14 +22,15 @@ enum-iterator.workspace = true
 crossbeam.workspace = true
 dotenv.workspace = true
 hashbrown.workspace = true
+futures.workspace = true
+derive_more.workspace = true
 
 # local
 ethereum-abi.workspace = true
-bot_db.workspace = true
-bot_config.workspace = true
-bot_logger.workspace = true
-bot_executor.workspace = true
+kronos-db.workspace = true
+kronos-config.workspace = true
+kronos-logger.workspace = true
+kronos-executor.workspace = true
 
 # dexes
-uniswap-v2.workspace = true
-dex-common.workspace = true
+kronos-dexes.workspace = true

@@ -3,30 +3,36 @@ use alloy::{
     providers::{Provider, RootProvider},
 };
 use anyhow::Result;
-use bot_db::{TokensGraphStorage, DB};
-use bot_math::price_to_usd;
-use crossbeam::channel::Receiver;
-use dex_common::Arbitrage;
-use ethereum_abi::IUniswapV2Pair;
+use kronos_db::{TokensGraphStorage, DB};
+use kronos_dexes::common::Arbitrage;
+use kronos_math::price_to_usd;
 use std::sync::Arc;
 
 pub mod max_price;
 pub mod triangular_swap;
 
-#[derive(Clone)]
-pub struct ArbitrageExecutor {
-    r: Receiver<Arbitrage>,
-    db: DB,
-    provider: Arc<RootProvider>,
+pub enum ExecutorEvent {
+    ArbitrageExecuted,
 }
 
-impl ArbitrageExecutor {
-    pub fn new(r: Receiver<Arbitrage>, db: DB, provider: Arc<RootProvider>) -> Self {
-        Self { db, provider, r }
+pub struct Executor {
+    db: DB,
+    provider: Arc<RootProvider>,
+
+    rx: tokio::sync::mpsc::UnboundedReceiver<Arbitrage>,
+}
+
+impl Executor {
+    pub fn new(
+        db: DB,
+        provider: Arc<RootProvider>,
+        rx: tokio::sync::mpsc::UnboundedReceiver<Arbitrage>,
+    ) -> Self {
+        Self { db, provider, rx }
     }
 
-    pub async fn run(self) -> Result<()> {
-        while let Ok(arbitrage) = self.r.recv() {
+    pub async fn start(mut self) -> Result<()> {
+        while let Some(arbitrage) = self.rx.recv().await {
             self.process_arbitrage(arbitrage).await?;
         }
         Ok(())
@@ -34,6 +40,14 @@ impl ArbitrageExecutor {
 
     pub async fn process_arbitrage(&self, arbitrage: Arbitrage) -> Result<()> {
         let first_token = arbitrage.path[0].0;
+        let amount_in_usd = price_to_usd(
+            self.db.clone(),
+            arbitrage.dex_id,
+            &first_token,
+            arbitrage.amount_in,
+        )
+        .await?;
+
         let revenue_usd = price_to_usd(
             self.db.clone(),
             arbitrage.dex_id,
@@ -49,7 +63,6 @@ impl ArbitrageExecutor {
                 .db
                 .pair_adr(arbitrage.dex_id, &tokens.0, &tokens.1)
                 .await?;
-            // let instance = IUniswapV2Pair::new(pair_adr.clone(), self.provider.clone());
             let slot = self
                 .provider
                 .get_storage_at(pair_adr, Uint::<256, 4>::from(4))
@@ -57,7 +70,7 @@ impl ArbitrageExecutor {
             tracing::info!("pair: {pair_adr:?} slot: {slot:?}");
         }
 
-        tracing::info!("revenue_usd: {revenue_usd}");
+        tracing::info!("revenue_usd: {revenue_usd}, amount in: {amount_in_usd}");
 
         Ok(())
     }
